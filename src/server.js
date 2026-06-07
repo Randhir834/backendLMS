@@ -74,6 +74,22 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
 
 app.use('/api', routes);
 
+// Home route
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'PlayFit LMS Backend Running Successfully',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      documentation: 'See API routes in /api'
+    }
+  });
+});
+
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
