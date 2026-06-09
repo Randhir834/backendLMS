@@ -54,7 +54,7 @@ const register = async (req, res, next) => {
     res.status(201).json({
       message: 'User registered successfully',
       user: {
-        id: user.id, name: user.name, email: user.email, role: user.role, password_changed: true,
+        id: user.id, name: user.name, email: user.email, role: user.role,
         date_of_birth: user.date_of_birth, age: user.age, school: user.school, grade: user.grade,
         parent_guardian_name: user.parent_guardian_name, phone: user.phone, location: user.location,
         qualifications: user.qualifications, specialization: user.specialization
@@ -108,7 +108,12 @@ const login = async (req, res, next) => {
 
     res.json({
       message: 'Login successful',
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, password_changed: true },
+      user: { 
+        id: user.id, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role
+      },
       token,
     });
   } catch (error) {

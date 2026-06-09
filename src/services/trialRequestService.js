@@ -1,9 +1,9 @@
 const { query } = require('../config/database');
 
-const createTrialRequest = async ({ name, email, phone, grade, role = 'student' }) => {
+const createTrialRequest = async ({ name, email, phone, grade }) => {
   const result = await query(
-    'INSERT INTO trial_requests (name, email, phone, grade, role) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-    [name, email, phone, grade, role]
+    'INSERT INTO trial_requests (name, email, phone, grade) VALUES ($1, $2, $3, $4) RETURNING *',
+    [name, email, phone, grade]
   );
   return result.rows[0];
 };

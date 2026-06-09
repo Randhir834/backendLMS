@@ -1,24 +1,13 @@
 const { query } = require('../config/database');
 
-const findQuizzesByCourse = async (courseId) => {
-  const result = await query(
-    `SELECT q.*, u.name as creator_name, u.role as creator_role,
-     (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.id) as question_count,
-     (SELECT COUNT(DISTINCT student_id) FROM quiz_attempts WHERE quiz_id = q.id) as attempt_count
-     FROM quizzes q
-     LEFT JOIN users u ON q.created_by = u.id
-     WHERE q.course_id = $1 
-     ORDER BY q.created_at DESC`,
-    [courseId]
-  );
-  return result.rows;
-};
+// ==================== QUIZ CRUD OPERATIONS ====================
 
 const findAllQuizzes = async () => {
   const result = await query(
     `SELECT q.*, c.title as course_title, u.name as creator_name, u.role as creator_role,
-     (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.id) as question_count,
-     (SELECT COUNT(DISTINCT student_id) FROM quiz_attempts WHERE quiz_id = q.id) as attempt_count
+     COALESCE((SELECT COUNT(*)::INTEGER FROM quiz_attempts WHERE quiz_id = q.id), 0) as attempt_count,
+     COALESCE((SELECT COUNT(DISTINCT student_id)::INTEGER FROM quiz_attempts WHERE quiz_id = q.id), 0) as student_count,
+     COALESCE((SELECT COUNT(*)::INTEGER FROM quiz_questions WHERE quiz_id = q.id), 0) as question_count
      FROM quizzes q
      LEFT JOIN courses c ON q.course_id = c.id
      LEFT JOIN users u ON q.created_by = u.id
@@ -27,10 +16,25 @@ const findAllQuizzes = async () => {
   return result.rows;
 };
 
+const findQuizzesByCourse = async (courseId) => {
+  const result = await query(
+    `SELECT q.*, u.name as creator_name, u.role as creator_role,
+     COALESCE((SELECT COUNT(*)::INTEGER FROM quiz_attempts WHERE quiz_id = q.id), 0) as attempt_count,
+     COALESCE((SELECT COUNT(DISTINCT student_id)::INTEGER FROM quiz_attempts WHERE quiz_id = q.id), 0) as student_count,
+     COALESCE((SELECT COUNT(*)::INTEGER FROM quiz_questions WHERE quiz_id = q.id), 0) as question_count
+     FROM quizzes q
+     LEFT JOIN users u ON q.created_by = u.id
+     WHERE q.course_id = $1 
+     ORDER BY q.due_date ASC`,
+    [courseId]
+  );
+  return result.rows;
+};
+
 const findQuizById = async (id) => {
   const result = await query(
     `SELECT q.*, c.title as course_title, u.name as creator_name, u.role as creator_role,
-     (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.id) as question_count
+     COALESCE((SELECT COUNT(*)::INTEGER FROM quiz_questions WHERE quiz_id = q.id), 0) as question_count
      FROM quizzes q
      LEFT JOIN courses c ON q.course_id = c.id
      LEFT JOIN users u ON q.created_by = u.id
@@ -40,30 +44,63 @@ const findQuizById = async (id) => {
   return result.rows[0] || null;
 };
 
-const createQuiz = async ({ course_id, title, description, time_limit_minutes, passing_score, created_by, deadline, max_attempts, show_correct_answers, randomize_questions }) => {
+const createQuiz = async (quizData) => {
+  const {
+    course_id, title, description, instructions, quiz_type, time_limit_minutes,
+    total_marks, passing_marks, allow_retake, max_attempts, show_results_immediately,
+    show_correct_answers, randomize_questions, randomize_options, is_published,
+    start_date, due_date, created_by
+  } = quizData;
+
   const result = await query(
-    `INSERT INTO quizzes (course_id, title, description, time_limit_minutes, passing_score, created_by, deadline, max_attempts, show_correct_answers, randomize_questions) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-    [course_id, title, description, time_limit_minutes || 30, passing_score || 50, created_by, deadline, max_attempts || 1, show_correct_answers !== false, randomize_questions || false]
+    `INSERT INTO quizzes (
+      course_id, title, description, instructions, quiz_type, time_limit_minutes,
+      total_marks, passing_marks, allow_retake, max_attempts, show_results_immediately,
+      show_correct_answers, randomize_questions, randomize_options, is_published,
+      start_date, due_date, created_by
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) 
+    RETURNING *`,
+    [
+      course_id, title, description, instructions, quiz_type || 'test', time_limit_minutes,
+      total_marks || 100, passing_marks || 40, allow_retake !== false, max_attempts || 1,
+      show_results_immediately !== false, show_correct_answers || false,
+      randomize_questions || false, randomize_options || false, is_published !== false,
+      start_date, due_date, created_by
+    ]
   );
   return result.rows[0];
 };
 
 const updateQuizById = async (id, data) => {
+  const fields = [];
+  const values = [];
+  let paramCount = 1;
+
+  const allowedFields = [
+    'title', 'description', 'instructions', 'quiz_type', 'time_limit_minutes',
+    'total_marks', 'passing_marks', 'allow_retake', 'max_attempts',
+    'show_results_immediately', 'show_correct_answers', 'randomize_questions',
+    'randomize_options', 'is_published', 'start_date', 'due_date'
+  ];
+
+  allowedFields.forEach(field => {
+    if (data[field] !== undefined) {
+      fields.push(`${field} = $${paramCount}`);
+      values.push(data[field]);
+      paramCount++;
+    }
+  });
+
+  if (fields.length === 0) {
+    throw new Error('No fields to update');
+  }
+
+  fields.push(`updated_at = NOW()`);
+  values.push(id);
+
   const result = await query(
-    `UPDATE quizzes SET 
-     title = COALESCE($1, title), 
-     description = COALESCE($2, description), 
-     time_limit_minutes = COALESCE($3, time_limit_minutes), 
-     passing_score = COALESCE($4, passing_score), 
-     is_published = COALESCE($5, is_published),
-     deadline = COALESCE($6, deadline),
-     max_attempts = COALESCE($7, max_attempts),
-     show_correct_answers = COALESCE($8, show_correct_answers),
-     randomize_questions = COALESCE($9, randomize_questions),
-     updated_at = NOW() 
-     WHERE id = $10 RETURNING *`,
-    [data.title, data.description, data.time_limit_minutes, data.passing_score, data.is_published, data.deadline, data.max_attempts, data.show_correct_answers, data.randomize_questions, id]
+    `UPDATE quizzes SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+    values
   );
   return result.rows[0];
 };
@@ -72,72 +109,93 @@ const deleteQuizById = async (id) => {
   await query('DELETE FROM quizzes WHERE id = $1', [id]);
 };
 
-const findQuestionsByQuiz = async (quizId) => {
-  const result = await query(
-    'SELECT * FROM quiz_questions WHERE quiz_id = $1 ORDER BY sort_order ASC',
-    [quizId]
+// ==================== QUESTION MANAGEMENT ====================
+
+const addQuestion = async (questionData) => {
+  const { quiz_id, question_text, question_type, marks, order_index, explanation, options } = questionData;
+
+  // Insert question
+  const questionResult = await query(
+    `INSERT INTO quiz_questions (quiz_id, question_text, question_type, marks, order_index, explanation) 
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [quiz_id, question_text, question_type || 'multiple_choice', marks || 1, order_index || 0, explanation]
   );
+
+  const question = questionResult.rows[0];
+
+  // Insert options if provided
+  if (options && options.length > 0) {
+    for (let i = 0; i < options.length; i++) {
+      await query(
+        `INSERT INTO quiz_options (question_id, option_text, is_correct, order_index) 
+         VALUES ($1, $2, $3, $4)`,
+        [question.id, options[i].option_text, options[i].is_correct || false, i]
+      );
+    }
+  }
+
+  return question;
+};
+
+const getQuizQuestions = async (quizId, includeAnswers = false) => {
+  let questionQuery = `
+    SELECT qq.*, 
+    (SELECT json_agg(json_build_object(
+      'id', qo.id, 
+      'option_text', qo.option_text, 
+      'order_index', qo.order_index
+      ${includeAnswers ? ", 'is_correct', qo.is_correct" : ''}
+    ) ORDER BY qo.order_index) 
+    FROM quiz_options qo WHERE qo.question_id = qq.id) as options
+    FROM quiz_questions qq
+    WHERE qq.quiz_id = $1
+    ORDER BY qq.order_index
+  `;
+
+  const result = await query(questionQuery, [quizId]);
   return result.rows;
 };
 
-const createQuestion = async ({ quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, sort_order }) => {
-  const result = await query(
-    'INSERT INTO quiz_questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, sort_order) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-    [quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks || 1, sort_order || 0]
-  );
-  
-  // Update total marks in quiz
-  await query(
-    'UPDATE quizzes SET total_marks = (SELECT COALESCE(SUM(marks), 0) FROM quiz_questions WHERE quiz_id = $1) WHERE id = $1',
-    [quiz_id]
-  );
-  
-  return result.rows[0];
-};
+const updateQuestion = async (questionId, data) => {
+  const { question_text, question_type, marks, order_index, explanation } = data;
 
-const updateQuestionById = async (id, data) => {
   const result = await query(
     `UPDATE quiz_questions SET 
      question_text = COALESCE($1, question_text),
-     option_a = COALESCE($2, option_a),
-     option_b = COALESCE($3, option_b),
-     option_c = COALESCE($4, option_c),
-     option_d = COALESCE($5, option_d),
-     correct_option = COALESCE($6, correct_option),
-     marks = COALESCE($7, marks),
-     sort_order = COALESCE($8, sort_order)
-     WHERE id = $9 RETURNING *`,
-    [data.question_text, data.option_a, data.option_b, data.option_c, data.option_d, data.correct_option, data.marks, data.sort_order, id]
+     question_type = COALESCE($2, question_type),
+     marks = COALESCE($3, marks),
+     order_index = COALESCE($4, order_index),
+     explanation = COALESCE($5, explanation),
+     updated_at = NOW()
+     WHERE id = $6 RETURNING *`,
+    [question_text, question_type, marks, order_index, explanation, questionId]
   );
-  
-  if (result.rows[0]) {
-    // Update total marks in quiz
-    await query(
-      'UPDATE quizzes SET total_marks = (SELECT COALESCE(SUM(marks), 0) FROM quiz_questions WHERE quiz_id = $1) WHERE id = $1',
-      [result.rows[0].quiz_id]
-    );
-  }
-  
+
   return result.rows[0];
 };
 
-const deleteQuestionById = async (id) => {
-  // Get quiz_id before deleting
-  const questionResult = await query('SELECT quiz_id FROM quiz_questions WHERE id = $1', [id]);
-  const quizId = questionResult.rows[0]?.quiz_id;
-  
-  await query('DELETE FROM quiz_questions WHERE id = $1', [id]);
-  
-  // Update total marks in quiz
-  if (quizId) {
-    await query(
-      'UPDATE quizzes SET total_marks = (SELECT COALESCE(SUM(marks), 0) FROM quiz_questions WHERE quiz_id = $1) WHERE id = $1',
-      [quizId]
-    );
+const deleteQuestion = async (questionId) => {
+  await query('DELETE FROM quiz_questions WHERE id = $1', [questionId]);
+};
+
+const updateQuestionOptions = async (questionId, options) => {
+  // Delete existing options
+  await query('DELETE FROM quiz_options WHERE question_id = $1', [questionId]);
+
+  // Insert new options
+  if (options && options.length > 0) {
+    for (let i = 0; i < options.length; i++) {
+      await query(
+        `INSERT INTO quiz_options (question_id, option_text, is_correct, order_index) 
+         VALUES ($1, $2, $3, $4)`,
+        [questionId, options[i].option_text, options[i].is_correct || false, i]
+      );
+    }
   }
 };
 
-// Quiz Assignment Functions
+// ==================== QUIZ ASSIGNMENT ====================
+
 const assignQuizToStudents = async (quizId, studentIds) => {
   const values = studentIds.map((studentId, index) => 
     `($1, $${index + 2})`
@@ -168,15 +226,18 @@ const assignQuizToAllEnrolled = async (quizId, courseId) => {
 
 const getQuizAssignments = async (quizId) => {
   const result = await query(
-    `SELECT qa.*, u.name, u.email, u.profile_photo,
+    `SELECT qa.*, u.name, u.email, u.avatar_url as profile_photo,
      (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = qa.quiz_id AND student_id = qa.student_id) as attempt_count,
-     (SELECT MAX(score) FROM quiz_attempts WHERE quiz_id = qa.quiz_id AND student_id = qa.student_id AND status = 'completed') as best_score
+     (SELECT status FROM quiz_attempts WHERE quiz_id = qa.quiz_id AND student_id = qa.student_id ORDER BY attempt_number DESC LIMIT 1) as latest_status,
+     (SELECT score FROM quiz_attempts WHERE quiz_id = qa.quiz_id AND student_id = qa.student_id ORDER BY attempt_number DESC LIMIT 1) as latest_score,
+     (SELECT percentage FROM quiz_attempts WHERE quiz_id = qa.quiz_id AND student_id = qa.student_id ORDER BY attempt_number DESC LIMIT 1) as latest_percentage
      FROM quiz_assignments qa
      JOIN users u ON qa.student_id = u.id
      WHERE qa.quiz_id = $1
      ORDER BY qa.assigned_at DESC`,
     [quizId]
   );
+  
   return result.rows;
 };
 
@@ -187,152 +248,346 @@ const removeQuizAssignment = async (quizId, studentId) => {
   );
 };
 
-const startAttempt = async ({ quiz_id, student_id }) => {
-  // Check if student is assigned to this quiz
-  const assignmentCheck = await query(
-    'SELECT * FROM quiz_assignments WHERE quiz_id = $1 AND student_id = $2',
-    [quiz_id, student_id]
-  );
-  
-  if (assignmentCheck.rows.length === 0) {
-    throw new Error('You are not assigned to this quiz');
-  }
-  
-  // Check max attempts
-  const quiz = await findQuizById(quiz_id);
-  const previousAttempts = await query(
-    'SELECT COUNT(*) as count FROM quiz_attempts WHERE quiz_id = $1 AND student_id = $2',
-    [quiz_id, student_id]
-  );
-  
-  const attemptNumber = parseInt(previousAttempts.rows[0].count) + 1;
-  
-  if (attemptNumber > quiz.max_attempts) {
-    throw new Error(`Maximum attempts (${quiz.max_attempts}) reached`);
-  }
-  
-  // Check deadline
-  if (quiz.deadline && new Date(quiz.deadline) < new Date()) {
-    throw new Error('Quiz deadline has passed');
-  }
-  
-  const result = await query(
-    'INSERT INTO quiz_attempts (quiz_id, student_id, attempt_number, total_marks) VALUES ($1, $2, $3, $4) RETURNING *',
-    [quiz_id, student_id, attemptNumber, quiz.total_marks]
-  );
-  return result.rows[0];
-};
-
-const submitAnswer = async ({ attempt_id, question_id, selected_option, is_correct }) => {
-  const result = await query(
-    'INSERT INTO quiz_answers (attempt_id, question_id, selected_option, is_correct) VALUES ($1, $2, $3, $4) RETURNING *',
-    [attempt_id, question_id, selected_option, is_correct]
-  );
-  return result.rows[0];
-};
-
-const completeAttempt = async (id, { score, total_marks, time_taken_seconds }) => {
-  const result = await query(
-    'UPDATE quiz_attempts SET score = $1, total_marks = $2, time_taken_seconds = $3, status = $4, completed_at = NOW() WHERE id = $5 RETURNING *',
-    [score, total_marks, time_taken_seconds, 'completed', id]
-  );
-  
-  // Mark assignment as completed
-  if (result.rows[0]) {
-    await query(
-      'UPDATE quiz_assignments SET is_completed = TRUE WHERE quiz_id = $1 AND student_id = $2',
-      [result.rows[0].quiz_id, result.rows[0].student_id]
-    );
-  }
-  
-  return result.rows[0];
-};
-
-const findAttemptsByStudent = async (studentId) => {
-  const result = await query(
-    `SELECT a.*, q.title AS quiz_title, q.course_id, q.passing_score, q.deadline, c.title AS course_title,
-     q.id as quiz_id
-     FROM quiz_attempts a 
-     JOIN quizzes q ON a.quiz_id = q.id 
-     JOIN courses c ON q.course_id = c.id 
-     WHERE a.student_id = $1 
-     ORDER BY a.created_at DESC`,
-    [studentId]
-  );
-  return result.rows;
-};
-
-const findAttemptsByQuiz = async (quizId) => {
-  const result = await query(
-    `SELECT a.*, u.name as student_name, u.email as student_email, u.profile_photo
-     FROM quiz_attempts a
-     JOIN users u ON a.student_id = u.id
-     WHERE a.quiz_id = $1
-     ORDER BY a.completed_at DESC, a.started_at DESC`,
-    [quizId]
-  );
-  return result.rows;
-};
-
-const getQuizStatistics = async (quizId) => {
-  const result = await query(
-    `SELECT 
-     COUNT(DISTINCT student_id) as total_students_attempted,
-     COUNT(*) as total_attempts,
-     AVG(score) as average_score,
-     MAX(score) as highest_score,
-     MIN(score) as lowest_score,
-     AVG(time_taken_seconds) as average_time_seconds
-     FROM quiz_attempts
-     WHERE quiz_id = $1 AND status = 'completed'`,
-    [quizId]
-  );
-  
-  const assignedCount = await query(
-    'SELECT COUNT(*) as assigned_count FROM quiz_assignments WHERE quiz_id = $1',
-    [quizId]
-  );
-  
-  return {
-    ...result.rows[0],
-    total_assigned: parseInt(assignedCount.rows[0].assigned_count)
-  };
-};
+// ==================== STUDENT QUIZ ACCESS ====================
 
 const getStudentQuizzes = async (studentId) => {
   const result = await query(
     `SELECT q.*, c.title as course_title, qa.assigned_at, qa.is_completed,
      (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = q.id AND student_id = $1) as my_attempts,
-     (SELECT MAX(score) FROM quiz_attempts WHERE quiz_id = q.id AND student_id = $1 AND status = 'completed') as my_best_score,
-     (SELECT status FROM quiz_attempts WHERE quiz_id = q.id AND student_id = $1 ORDER BY started_at DESC LIMIT 1) as last_attempt_status
+     (SELECT score FROM quiz_attempts WHERE quiz_id = q.id AND student_id = $1 ORDER BY attempt_number DESC LIMIT 1) as my_score,
+     (SELECT percentage FROM quiz_attempts WHERE quiz_id = q.id AND student_id = $1 ORDER BY attempt_number DESC LIMIT 1) as my_percentage,
+     (SELECT status FROM quiz_attempts WHERE quiz_id = q.id AND student_id = $1 ORDER BY attempt_number DESC LIMIT 1) as my_status,
+     (SELECT is_passed FROM quiz_attempts WHERE quiz_id = q.id AND student_id = $1 ORDER BY attempt_number DESC LIMIT 1) as my_passed,
+     (SELECT submitted_at FROM quiz_attempts WHERE quiz_id = q.id AND student_id = $1 ORDER BY attempt_number DESC LIMIT 1) as last_submitted_at
      FROM quiz_assignments qa
      JOIN quizzes q ON qa.quiz_id = q.id
      JOIN courses c ON q.course_id = c.id
      WHERE qa.student_id = $1 AND q.is_published = TRUE
-     ORDER BY qa.assigned_at DESC`,
+     ORDER BY q.due_date ASC`,
     [studentId]
   );
   return result.rows;
 };
 
-const findAttemptById = async (id) => {
-  const result = await query('SELECT * FROM quiz_attempts WHERE id = $1', [id]);
-  return result.rows[0] || null;
+// ==================== QUIZ ATTEMPTS ====================
+
+const startQuizAttempt = async (quizId, studentId) => {
+  // Check if student is assigned to this quiz
+  const assignmentCheck = await query(
+    'SELECT * FROM quiz_assignments WHERE quiz_id = $1 AND student_id = $2',
+    [quizId, studentId]
+  );
+  
+  if (assignmentCheck.rows.length === 0) {
+    throw new Error('You are not assigned to this quiz');
+  }
+
+  // Get quiz details
+  const quiz = await findQuizById(quizId);
+  
+  // Check if quiz has started
+  if (quiz.start_date && new Date(quiz.start_date) > new Date()) {
+    throw new Error('This quiz has not started yet');
+  }
+
+  // Check existing attempts
+  const existingAttempts = await query(
+    'SELECT * FROM quiz_attempts WHERE quiz_id = $1 AND student_id = $2 ORDER BY attempt_number DESC',
+    [quizId, studentId]
+  );
+
+  // Check if there's an in-progress attempt
+  const inProgressAttempt = existingAttempts.rows.find(a => a.status === 'in_progress');
+  if (inProgressAttempt) {
+    return inProgressAttempt; // Return existing in-progress attempt
+  }
+
+  // Check if maximum attempts reached
+  if (existingAttempts.rows.length >= quiz.max_attempts) {
+    if (!quiz.allow_retake) {
+      throw new Error('Maximum attempts reached for this quiz');
+    }
+  }
+
+  // Create new attempt
+  const attemptNumber = existingAttempts.rows.length + 1;
+  const result = await query(
+    `INSERT INTO quiz_attempts (quiz_id, student_id, attempt_number, status, started_at) 
+     VALUES ($1, $2, $3, 'in_progress', NOW()) RETURNING *`,
+    [quizId, studentId, attemptNumber]
+  );
+
+  return result.rows[0];
 };
 
-const findAnswersByAttempt = async (attemptId) => {
+const saveQuizResponse = async (attemptId, questionId, responseData) => {
+  const { selected_option_id, answer_text } = responseData;
+
+  // Check if this is a multiple choice question and evaluate correctness
+  let isCorrect = null;
+  if (selected_option_id) {
+    const optionResult = await query(
+      'SELECT is_correct FROM quiz_options WHERE id = $1',
+      [selected_option_id]
+    );
+    if (optionResult.rows.length > 0) {
+      isCorrect = optionResult.rows[0].is_correct;
+    }
+  }
+
   const result = await query(
-    'SELECT a.*, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option FROM quiz_answers a JOIN quiz_questions q ON a.question_id = q.id WHERE a.attempt_id = $1 ORDER BY q.sort_order ASC',
+    `INSERT INTO quiz_responses (attempt_id, question_id, selected_option_id, answer_text, is_correct) 
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (attempt_id, question_id) 
+     DO UPDATE SET 
+       selected_option_id = EXCLUDED.selected_option_id,
+       answer_text = EXCLUDED.answer_text,
+       is_correct = EXCLUDED.is_correct,
+       updated_at = NOW()
+     RETURNING *`,
+    [attemptId, questionId, selected_option_id, answer_text, isCorrect]
+  );
+
+  return result.rows[0];
+};
+
+const submitQuizAttempt = async (attemptId, isAutoSubmit = false) => {
+  // Get attempt details
+  const attemptResult = await query('SELECT * FROM quiz_attempts WHERE id = $1', [attemptId]);
+  const attempt = attemptResult.rows[0];
+
+  if (!attempt) {
+    throw new Error('Attempt not found');
+  }
+
+  if (attempt.status !== 'in_progress') {
+    throw new Error('This attempt has already been submitted');
+  }
+
+  // Calculate time taken
+  const startedAt = new Date(attempt.started_at);
+  const submittedAt = new Date();
+  const timeTakenMinutes = Math.round((submittedAt - startedAt) / 60000);
+
+  // Get quiz details
+  const quiz = await findQuizById(attempt.quiz_id);
+
+  // Check if late
+  const isLate = quiz.due_date && submittedAt > new Date(quiz.due_date);
+
+  // Calculate score for objective questions
+  const responsesResult = await query(
+    `SELECT qr.*, qq.marks, qq.question_type
+     FROM quiz_responses qr
+     JOIN quiz_questions qq ON qr.question_id = qq.id
+     WHERE qr.attempt_id = $1`,
     [attemptId]
+  );
+
+  let totalScore = 0;
+  let needsManualGrading = false;
+
+  for (const response of responsesResult.rows) {
+    if (response.question_type === 'multiple_choice' || response.question_type === 'true_false') {
+      // Auto-graded
+      if (response.is_correct) {
+        totalScore += parseFloat(response.marks);
+        await query(
+          'UPDATE quiz_responses SET marks_obtained = $1 WHERE id = $2',
+          [response.marks, response.id]
+        );
+      } else {
+        await query(
+          'UPDATE quiz_responses SET marks_obtained = 0 WHERE id = $2',
+          [response.id]
+        );
+      }
+    } else {
+      // Needs manual grading
+      needsManualGrading = true;
+    }
+  }
+
+  // Update attempt
+  const status = needsManualGrading ? 'submitted' : 'graded';
+  const statusType = isAutoSubmit ? 'auto_submitted' : status;
+
+  const result = await query(
+    `UPDATE quiz_attempts SET 
+     status = $1, submitted_at = NOW(), time_taken_minutes = $2, 
+     score = $3, is_late = $4, updated_at = NOW()
+     WHERE id = $5 RETURNING *`,
+    [statusType, timeTakenMinutes, needsManualGrading ? null : totalScore, isLate, attemptId]
+  );
+
+  return result.rows[0];
+};
+
+const getQuizAttempt = async (attemptId, includeResponses = false) => {
+  const attemptResult = await query(
+    `SELECT qa.*, q.title as quiz_title, q.total_marks, q.passing_marks, 
+     q.show_results_immediately, q.show_correct_answers,
+     u.name as student_name, u.email as student_email
+     FROM quiz_attempts qa
+     JOIN quizzes q ON qa.quiz_id = q.id
+     JOIN users u ON qa.student_id = u.id
+     WHERE qa.id = $1`,
+    [attemptId]
+  );
+
+  const attempt = attemptResult.rows[0];
+
+  if (!attempt) {
+    return null;
+  }
+
+  if (includeResponses) {
+    const responsesResult = await query(
+      `SELECT qr.*, qq.question_text, qq.question_type, qq.marks as question_marks, qq.explanation,
+       qo.option_text as selected_option_text, qo.is_correct as selected_option_correct,
+       (SELECT json_agg(json_build_object(
+         'id', o.id, 
+         'option_text', o.option_text, 
+         'is_correct', o.is_correct,
+         'order_index', o.order_index
+       ) ORDER BY o.order_index) 
+       FROM quiz_options o WHERE o.question_id = qq.id) as all_options
+       FROM quiz_responses qr
+       JOIN quiz_questions qq ON qr.question_id = qq.id
+       LEFT JOIN quiz_options qo ON qr.selected_option_id = qo.id
+       WHERE qr.attempt_id = $1
+       ORDER BY qq.order_index`,
+      [attemptId]
+    );
+
+    attempt.responses = responsesResult.rows;
+  }
+
+  return attempt;
+};
+
+const getStudentAttempts = async (quizId, studentId) => {
+  const result = await query(
+    `SELECT qa.* FROM quiz_attempts qa
+     WHERE qa.quiz_id = $1 AND qa.student_id = $2
+     ORDER BY qa.attempt_number DESC`,
+    [quizId, studentId]
   );
   return result.rows;
 };
 
+const getAllStudentAttempts = async (studentId) => {
+  const result = await query(
+    `SELECT qa.*, q.title as quiz_title, c.title as course_title, c.id as course_id
+     FROM quiz_attempts qa
+     JOIN quizzes q ON qa.quiz_id = q.id
+     JOIN courses c ON q.course_id = c.id
+     WHERE qa.student_id = $1 AND qa.status IN ('submitted', 'graded', 'auto_submitted')
+     ORDER BY qa.completed_at DESC NULLS LAST, qa.created_at DESC`,
+    [studentId]
+  );
+  return result.rows;
+};
+
+const getAllQuizAttempts = async (quizId) => {
+  const result = await query(
+    `SELECT qa.*, u.name as student_name, u.email as student_email, u.avatar_url as profile_photo
+     FROM quiz_attempts qa
+     JOIN users u ON qa.student_id = u.id
+     WHERE qa.quiz_id = $1 AND qa.status IN ('submitted', 'graded', 'auto_submitted')
+     ORDER BY qa.submitted_at DESC`,
+    [quizId]
+  );
+  return result.rows;
+};
+
+// ==================== MANUAL GRADING ====================
+
+const gradeQuizAttempt = async (attemptId, gradingData, instructorId) => {
+  const { responses, overall_feedback } = gradingData;
+
+  // Update individual responses with manual scores
+  let totalScore = 0;
+  for (const response of responses) {
+    await query(
+      `UPDATE quiz_responses SET 
+       marks_obtained = $1, instructor_feedback = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [response.marks_obtained, response.instructor_feedback, response.id]
+    );
+    totalScore += parseFloat(response.marks_obtained || 0);
+  }
+
+  // Update attempt with total score and grading info
+  const result = await query(
+    `UPDATE quiz_attempts SET 
+     score = $1, status = 'graded', feedback = $2, 
+     graded_by = $3, graded_at = NOW(), updated_at = NOW()
+     WHERE id = $4 RETURNING *`,
+    [totalScore, overall_feedback, instructorId, attemptId]
+  );
+
+  return result.rows[0];
+};
+
+// ==================== STATISTICS ====================
+
+const getQuizStatistics = async (quizId) => {
+  const result = await query(
+    `SELECT 
+     COUNT(DISTINCT qa.student_id) as total_assigned,
+     COUNT(DISTINCT CASE WHEN qat.status IN ('submitted', 'graded', 'auto_submitted') THEN qat.student_id END) as total_completed,
+     COUNT(CASE WHEN qat.status = 'graded' THEN 1 END) as total_graded,
+     COUNT(CASE WHEN qat.status IN ('submitted', 'auto_submitted') THEN 1 END) as pending_grading,
+     AVG(CASE WHEN qat.status = 'graded' THEN qat.score END) as avg_score,
+     MAX(qat.score) as highest_score,
+     MIN(CASE WHEN qat.status = 'graded' THEN qat.score END) as lowest_score,
+     COUNT(CASE WHEN qat.is_late = true THEN 1 END) as late_submissions,
+     COUNT(CASE WHEN qat.is_passed = true THEN 1 END) as passed_count,
+     COUNT(CASE WHEN qat.is_passed = false THEN 1 END) as failed_count,
+     AVG(CASE WHEN qat.status IN ('submitted', 'graded', 'auto_submitted') THEN qat.time_taken_minutes END) as avg_time_taken
+     FROM quiz_assignments qa
+     LEFT JOIN quiz_attempts qat ON qa.quiz_id = qat.quiz_id AND qa.student_id = qat.student_id
+     WHERE qa.quiz_id = $1`,
+    [quizId]
+  );
+
+  const stats = result.rows[0];
+
+  // Calculate completion rate
+  if (stats.total_assigned > 0) {
+    stats.completion_rate = Math.round((stats.total_completed / stats.total_assigned) * 100);
+  } else {
+    stats.completion_rate = 0;
+  }
+
+  return stats;
+};
+
 module.exports = {
-  findQuizzesByCourse, findAllQuizzes, findQuizById, createQuiz, updateQuizById, deleteQuizById,
-  findQuestionsByQuiz, createQuestion, updateQuestionById, deleteQuestionById,
-  assignQuizToStudents, assignQuizToAllEnrolled, getQuizAssignments, removeQuizAssignment,
-  startAttempt, submitAnswer, completeAttempt, 
-  findAttemptsByStudent, findAttemptsByQuiz, findAttemptById, findAnswersByAttempt,
-  getQuizStatistics, getStudentQuizzes,
+  findAllQuizzes,
+  findQuizzesByCourse,
+  findQuizById,
+  createQuiz,
+  updateQuizById,
+  deleteQuizById,
+  addQuestion,
+  getQuizQuestions,
+  updateQuestion,
+  deleteQuestion,
+  updateQuestionOptions,
+  assignQuizToStudents,
+  assignQuizToAllEnrolled,
+  getQuizAssignments,
+  removeQuizAssignment,
+  getStudentQuizzes,
+  startQuizAttempt,
+  saveQuizResponse,
+  submitQuizAttempt,
+  getQuizAttempt,
+  getStudentAttempts,
+  getAllStudentAttempts,
+  getAllQuizAttempts,
+  gradeQuizAttempt,
+  getQuizStatistics,
 };

@@ -178,7 +178,8 @@ const deleteUserById = async (id) => {
 };
 
 const getDashboardStats = async () => {
-  const students = await query("SELECT COUNT(*) AS count FROM users WHERE role = 'student'");
+  // Count unique students who are enrolled in at least one course
+  const students = await query("SELECT COUNT(DISTINCT user_id) AS count FROM enrollments WHERE user_id IN (SELECT id FROM users WHERE role = 'student')");
   const instructors = await query("SELECT COUNT(*) AS count FROM users WHERE role = 'instructor'");
   const courses = await query('SELECT COUNT(*) AS count FROM courses');
   const enrollments = await query('SELECT COUNT(*) AS count FROM enrollments');
@@ -217,39 +218,7 @@ const getRecentPayments = async (limit = 10) => {
   return result.rows;
 };
 
-const createInstructor = async (instructorData) => {
-  const { name, email, phone, location, qualifications, specialization } = instructorData;
-
-  // Check if email already exists
-  const existingUser = await query('SELECT id FROM users WHERE email = $1', [email]);
-  if (existingUser.rows.length > 0) {
-    throw new Error('Email already exists');
-  }
-
-  // Set default password to 12345
-  const plainPassword = '12345';
-  const bcrypt = require('bcryptjs');
-  const hashedPassword = await bcrypt.hash(plainPassword, 12);
-
-  // Create the instructor account
-  const result = await query(
-    `INSERT INTO users (name, email, password, role, phone, location, qualifications, specialization, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-     RETURNING id, name, email, role, phone, location, qualifications, specialization, created_at, updated_at`,
-    [name, email, hashedPassword, 'instructor', phone, location, qualifications, specialization]
-  );
-
-  const instructor = result.rows[0];
-
-  // Return instructor data with the plain password (only shown once to admin)
-  return {
-    ...instructor,
-    plainPassword: plainPassword // This should only be shown to the admin once
-  };
-};
-
 module.exports = {
   findAllUsers, findUserById, updateUserRole, updateUser, deleteUserById,
   getDashboardStats, getEnrollmentTrend, getRecentEnrollments, getRecentPayments,
-  createInstructor
 };

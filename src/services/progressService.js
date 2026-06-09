@@ -1,5 +1,63 @@
 const { query } = require('../config/database');
 
+// Helper function to get course_id from lesson_id
+const getCourseIdFromLesson = async (lesson_id) => {
+  const result = await query(
+    `SELECT s.course_id FROM lessons l
+     JOIN sections s ON l.section_id = s.id
+     WHERE l.id = $1`,
+    [lesson_id]
+  );
+  return result.rows[0]?.course_id;
+};
+
+// Helper function to create certificate if course is complete
+const createCertificateIfCourseComplete = async (student_id, course_id) => {
+  try {
+    const { percentage } = await getCourseProgressPercentage(student_id, course_id);
+    
+    if (percentage === 100) {
+      // Check if certificate already exists
+      const existing = await query(
+        'SELECT id FROM certificates WHERE user_id = $1 AND course_id = $2',
+        [student_id, course_id]
+      );
+
+      if (existing.rows.length === 0) {
+        // Get enrollment for this user-course
+        const enrollment = await query(
+          'SELECT id, user_id, course_id FROM enrollments WHERE user_id = $1 AND course_id = $2',
+          [student_id, course_id]
+        );
+
+        if (enrollment.rows.length > 0) {
+          const enrollmentId = enrollment.rows[0].id;
+          const { createCertificate } = require('./certificateService');
+          await createCertificate({
+            user_id: student_id,
+            course_id,
+            enrollment_id: enrollmentId,
+          });
+        }
+      }
+
+      // Update enrollment to mark as completed
+      await query(
+        'UPDATE enrollments SET status = $1, progress = 100, completed_at = NOW() WHERE user_id = $2 AND course_id = $3',
+        ['completed', student_id, course_id]
+      );
+    } else {
+      // Update progress in enrollment
+      await query(
+        'UPDATE enrollments SET progress = $1 WHERE user_id = $2 AND course_id = $3',
+        [percentage, student_id, course_id]
+      );
+    }
+  } catch (error) {
+    console.error('Error creating certificate or updating enrollment:', error);
+  }
+};
+
 const updateLessonProgress = async ({ lesson_id, student_id, status }) => {
   const result = await query(
     `INSERT INTO lesson_progress (lesson_id, student_id, status, completed_at)
@@ -9,6 +67,15 @@ const updateLessonProgress = async ({ lesson_id, student_id, status }) => {
      RETURNING *`,
     [lesson_id, student_id, status]
   );
+
+  // If lesson was completed, check if course is now complete and create certificate
+  if (status === 'completed') {
+    const courseId = await getCourseIdFromLesson(lesson_id);
+    if (courseId) {
+      await createCertificateIfCourseComplete(student_id, courseId);
+    }
+  }
+
   return result.rows[0];
 };
 

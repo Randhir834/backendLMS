@@ -4,7 +4,7 @@ const { authorizeRoles } = require('../middleware/roleMiddleware');
 const { upload, uploadToSupabase } = require('../services/storageService');
 const {
   getAssignments, getAssignmentById, createAssignmentController, updateAssignment, deleteAssignment,
-  submitAssignmentController, getSubmissions, getMySubmissions, gradeSubmissionController,
+  submitAssignmentController, getSubmissions, getMySubmissions, gradeSubmissionController, getSubmissionHistory,
   assignStudents, getAssignedStudents, removeAssignment, getStatistics,
 } = require('../controllers/assignmentController');
 
@@ -48,6 +48,7 @@ router.post('/:id/submit', authenticate, authorizeRoles('student'), upload.singl
 });
 
 router.get('/:id/submissions', authenticate, authorizeRoles('instructor', 'admin'), getSubmissions);
+router.get('/:assignment_id/history/:student_id', authenticate, getSubmissionHistory);
 router.put('/:id/submissions/:submissionId/grade', authenticate, authorizeRoles('instructor', 'admin'), gradeSubmissionController);
 
 // Statistics

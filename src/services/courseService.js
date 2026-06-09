@@ -192,7 +192,7 @@ const createNewCourse = async ({
     `INSERT INTO courses (title, description, price, thumbnail_url, category_id, status,
       duration_value, duration_unit, level, language, what_you_learn, requirements)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-    [title, description, price, thumbnail_url, category_id, status || 'published',
+    [title, description, price, thumbnail_url, category_id, status || 'draft',
      duration_value || 0, duration_unit || 'days', level || 'beginner', language || 'English',
      what_you_learn, requirements]
   );
@@ -278,6 +278,14 @@ const getEnrollmentCount = async (courseId) => {
   return parseInt(result.rows[0].count, 10);
 };
 
+const verifyInstructorCourseAccess = async (instructorId, courseId) => {
+  const result = await query(
+    'SELECT 1 FROM course_instructors WHERE instructor_id = $1 AND course_id = $2',
+    [instructorId, courseId]
+  );
+  return result.rows.length > 0;
+};
+
 module.exports = {
   findAllCourses,
   findPublishedCourses,
@@ -289,4 +297,5 @@ module.exports = {
   assignInstructors,
   removeInstructor,
   getEnrollmentCount,
+  verifyInstructorCourseAccess,
 };

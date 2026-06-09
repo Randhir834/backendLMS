@@ -117,8 +117,7 @@ const updateUserById = async (id, { name, date_of_birth, school, grade, parent_g
   return user;
 };
 
-const updateUserPassword = async (id, hashedPassword, markAsChanged = false) => {
-  // Always update password, password_changed is already TRUE by default
+const updateUserPassword = async (id, hashedPassword) => {
   await query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashedPassword, id]);
 };
 

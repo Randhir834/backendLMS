@@ -1,4 +1,5 @@
 const { findUserById, updateUserById, updateUserPassword, getUserPasswordById, updateUserAvatar } = require('../services/userService');
+const { EVENTS, emitToAll, emitToUser, notifyDashboardUpdate } = require('../services/realtimeService');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
@@ -19,6 +20,11 @@ const updateProfile = async (req, res, next) => {
   try {
     const { name, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization } = req.body;
     const user = await updateUserById(req.user.id, { name, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization });
+    
+    // Emit real-time event
+    emitToUser(req.user.id, EVENTS.USER_UPDATED, user);
+    notifyDashboardUpdate();
+    
     res.json({ message: 'Profile updated successfully', user });
   } catch (error) {
     next(error);
@@ -52,7 +58,7 @@ const changePassword = async (req, res, next) => {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
-    await updateUserPassword(req.user.id, hashedPassword, true);
+    await updateUserPassword(req.user.id, hashedPassword);
 
     res.json({ message: 'Password changed successfully.' });
   } catch (error) {

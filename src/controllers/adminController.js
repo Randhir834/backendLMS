@@ -1,17 +1,7 @@
 const {
   findAllUsers, findUserById, updateUserRole, updateUser, deleteUserById,
   getDashboardStats, getEnrollmentTrend, getRecentEnrollments, getRecentPayments,
-  createInstructor
 } = require('../services/adminService');
-
-const {
-  broadcastUserUpdate,
-  broadcastUserDelete,
-  broadcastUserRoleChange,
-  broadcastAnalyticsUpdate
-} = require('../services/adminSyncService');
-
-const userDeletionService = require('../services/userDeletionService');
 
 const getUsers = async (req, res, next) => {
   try {
@@ -31,10 +21,6 @@ const getUserById = async (req, res, next) => {
 const updateUserRoleController = async (req, res, next) => {
   try {
     const user = await updateUserRole(req.params.id, req.body.role);
-    
-    // Broadcast role change to all admins
-    broadcastUserRoleChange(user.id, user.role, user.name);
-    
     res.json({ message: 'User role updated', user });
   } catch (error) { next(error); }
 };
@@ -53,8 +39,26 @@ const updateUserController = async (req, res, next) => {
     
     console.log('Updated user:', user);
     
-    // Broadcast user update to all admins
-    broadcastUserUpdate(user.id, user);
+    // Emit real-time update to the specific user
+    if (global.io) {
+      // Send update to the specific user's room
+      global.io.to(`user-${userId}`).emit('profile-updated', {
+        type: 'PROFILE_UPDATED',
+        user: user,
+        message: 'Your profile has been updated by an administrator',
+        timestamp: new Date().toISOString()
+      });
+
+      // Send update to admin room for admin dashboard updates
+      global.io.to('admin-room').emit('user-updated', {
+        type: 'USER_UPDATED',
+        user: user,
+        updatedBy: 'admin', // You can get this from req.user if you have auth
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`[socket] Emitted profile update for user ${userId}`);
+    }
     
     res.json({ message: 'User updated successfully', user });
   } catch (error) {
@@ -73,132 +77,9 @@ const updateUserController = async (req, res, next) => {
 
 const deleteUser = async (req, res, next) => {
   try {
-    const userId = parseInt(req.params.id);
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user ID' });
-    }
-
-    const { force = false, dryRun = false } = req.query;
-
-    // Use the new user deletion service
-    const result = await userDeletionService.deleteUser(userId, {
-      force: force === 'true',
-      dryRun: dryRun === 'true'
-    });
-
-    if (!result.success) {
-      if (result.requiresConfirmation) {
-        return res.status(200).json({
-          success: false,
-          requiresConfirmation: true,
-          message: result.message,
-          user: result.user,
-          impact: result.impact,
-          totalAffectedRecords: result.totalAffectedRecords
-        });
-      }
-      return res.status(400).json({ error: result.message });
-    }
-
-    // If it's a dry run, return the impact analysis
-    if (result.dryRun) {
-      return res.json({
-        success: true,
-        dryRun: true,
-        message: result.message,
-        user: result.user,
-        impact: result.impact
-      });
-    }
-
-    // Broadcast user deletion to all admins
-    broadcastUserDelete(result.user.id, result.user.name);
-    
-    res.json({
-      success: true,
-      message: result.message,
-      user: result.user,
-      impact: result.impact
-    });
-  } catch (error) {
-    console.error('Delete user error:', error);
-    next(error);
-  }
-};
-
-// New endpoint to get user deletion impact
-const getUserDeletionImpact = async (req, res, next) => {
-  try {
-    const userId = parseInt(req.params.id);
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user ID' });
-    }
-
-    const userInfo = await userDeletionService.getUserInfo(userId);
-    if (!userInfo) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const impact = await userDeletionService.getUserDeletionImpact(userId);
-    
-    res.json({
-      user: userInfo,
-      impact: impact,
-      totalAffectedRecords: impact.reduce((sum, item) => sum + parseInt(item.record_count), 0)
-    });
-  } catch (error) {
-    console.error('Get user deletion impact error:', error);
-    next(error);
-  }
-};
-
-// New endpoint to archive user instead of deleting
-const archiveUser = async (req, res, next) => {
-  try {
-    const userId = parseInt(req.params.id);
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user ID' });
-    }
-
-    const result = await userDeletionService.archiveUser(userId);
-    
-    res.json({
-      success: true,
-      message: result.message,
-      user: result.user
-    });
-  } catch (error) {
-    console.error('Archive user error:', error);
-    next(error);
-  }
-};
-
-// New endpoint to delete multiple users
-const deleteMultipleUsers = async (req, res, next) => {
-  try {
-    const { userIds, force = false } = req.body;
-    
-    if (!Array.isArray(userIds) || userIds.length === 0) {
-      return res.status(400).json({ error: 'userIds must be a non-empty array' });
-    }
-
-    // Validate all user IDs are numbers
-    const validUserIds = userIds.filter(id => !isNaN(parseInt(id))).map(id => parseInt(id));
-    if (validUserIds.length !== userIds.length) {
-      return res.status(400).json({ error: 'All user IDs must be valid numbers' });
-    }
-
-    const result = await userDeletionService.deleteMultipleUsers(validUserIds, { force });
-    
-    res.json({
-      success: true,
-      message: `Batch deletion completed: ${result.successCount} successful, ${result.failureCount} failed`,
-      results: result
-    });
-  } catch (error) {
-    console.error('Delete multiple users error:', error);
-    next(error);
-  }
+    await deleteUserById(req.params.id);
+    res.json({ message: 'User deleted' });
+  } catch (error) { next(error); }
 };
 
 const getAnalytics = async (req, res, next) => {
@@ -207,61 +88,75 @@ const getAnalytics = async (req, res, next) => {
     const enrollmentTrend = await getEnrollmentTrend(30);
     const recentEnrollments = await getRecentEnrollments(5);
     const recentPayments = await getRecentPayments(5);
-    
-    const analyticsData = { stats, enrollmentTrend, recentEnrollments, recentPayments };
-    
-    // Broadcast analytics update to all admins
-    broadcastAnalyticsUpdate(analyticsData);
-    
-    res.json(analyticsData);
+    res.json({ stats, enrollmentTrend, recentEnrollments, recentPayments });
   } catch (error) { next(error); }
 };
 
-const createInstructorAccount = async (req, res, next) => {
+const createAdmin = async (req, res, next) => {
   try {
-    const { name, email, phone, location, qualifications, specialization } = req.body;
+    const bcrypt = require('bcryptjs');
+    const { findUserByEmail, createUser } = require('../services/userService');
+    
+    const { name, email, password } = req.body;
 
-    // Validation
-    if (!name || !email || !phone || !location || !qualifications || !specialization) {
-      return res.status(400).json({ error: 'All fields are required: name, email, phone, location, qualifications, specialization' });
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required.' });
     }
 
-    // Email format validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: 'Invalid email format' });
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     }
 
-    const result = await createInstructor({
-      name,
-      email,
-      phone,
-      location,
-      qualifications,
-      specialization
-    });
-
-    res.status(201).json({
-      message: 'Instructor account created successfully',
-      instructor: result
-    });
-  } catch (error) {
-    if (error.message === 'Email already exists') {
+    // Check if email already exists
+    const existingUser = await findUserByEmail(email);
+    if (existingUser) {
       return res.status(409).json({ error: 'Email already registered' });
     }
+
+    // Hash password and create admin user
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const user = await createUser({
+      name,
+      email,
+      password: hashedPassword,
+      role: 'admin',
+      date_of_birth: null,
+      school: null,
+      grade: null,
+      parent_guardian_name: null,
+      phone: null,
+      location: null,
+      qualifications: null,
+      specialization: null
+    });
+
+    // Emit real-time update to all admins
+    if (global.io) {
+      global.io.to('admin-room').emit('admin-created', {
+        type: 'ADMIN_CREATED',
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    res.status(201).json({
+      message: 'Admin created successfully',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        created_at: user.created_at
+      }
+    });
+  } catch (error) {
     next(error);
   }
 };
 
-module.exports = { 
-  getUsers, 
-  getUserById, 
-  updateUserRoleController, 
-  updateUserController, 
-  deleteUser, 
-  getUserDeletionImpact,
-  archiveUser,
-  deleteMultipleUsers,
-  getAnalytics, 
-  createInstructorAccount 
-};
+module.exports = { getUsers, getUserById, updateUserRoleController, updateUserController, deleteUser, getAnalytics, createAdmin };

@@ -40,4 +40,4 @@ const uploadProfilePhoto = multer({
   }
 });
 
-module.exports = { uploadProfilePhoto };
+module.exports = { upload: uploadProfilePhoto, uploadProfilePhoto };

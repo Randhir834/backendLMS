@@ -20,9 +20,9 @@ const searchRoutes = require('./searchRoutes');
 const attendanceRoutes = require('./attendanceRoutes');
 const courseMaterialRoutes = require('./courseMaterialRoutes');
 const trialRequestRoutes = require('./trialRequestRoutes');
-const instructorRegistrationRoutes = require('./instructorRegistrationRoutes');
 const exportRoutes = require('./exportRoutes');
 const recommendationRoutes = require('./recommendationRoutes');
+const certificateRoutes = require('./certificateRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
@@ -41,9 +41,9 @@ router.use('/settings', settingsRoutes);
 router.use('/search', searchRoutes);
 router.use('/attendance', attendanceRoutes);
 router.use('/trial-requests', trialRequestRoutes);
-router.use('/instructor-registrations', instructorRegistrationRoutes);
 router.use('/export', exportRoutes);
 router.use('/recommendations', recommendationRoutes);
+router.use('/certificates', certificateRoutes);
 router.use('/', courseMaterialRoutes);
 
 router.use((req, res) => {

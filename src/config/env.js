@@ -34,7 +34,7 @@ function validateEnv() {
   if (errors.length) {
     console.error('\n[env] ❌ CONFIGURATION ERRORS:');
     errors.forEach(err => console.error(`  • ${err}`));
-    console.error('\n[env] Please set the following environment variables on Render:');
+    console.error('\n[env] Please set the following environment variables:');
     console.error('  1. JWT_SECRET (any string, 32+ characters recommended)');
     console.error('  2. DATABASE_URL (PostgreSQL connection string)');
     console.error('  3. CORS_ORIGIN (comma-separated list of allowed origins)');

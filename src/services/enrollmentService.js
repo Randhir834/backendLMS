@@ -120,6 +120,7 @@ const findCourseEnrollments = async (course_id, filters = {}) => {
       u.name AS student_name,
       u.email AS student_email,
       u.phone AS student_phone,
+      u.avatar_url,
       u.date_of_birth,
       u.grade,
       (SELECT COUNT(*) FROM lesson_progress lp 
@@ -144,9 +145,10 @@ const findCourseEnrollments = async (course_id, filters = {}) => {
   }
 
   if (search) {
-    sql += ` AND (LOWER(u.name) LIKE $${paramIdx} OR LOWER(u.email) LIKE $${paramIdx})`;
+    sql += ` AND (LOWER(u.name) LIKE $${paramIdx} OR LOWER(u.email) LIKE $${paramIdx + 1})`;
     params.push(`%${search.toLowerCase()}%`);
-    paramIdx++;
+    params.push(`%${search.toLowerCase()}%`);
+    paramIdx += 2;
   }
 
   // Add sorting
