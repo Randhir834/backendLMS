@@ -52,8 +52,11 @@ io.on('connection', (socket) => {
   });
 });
 
-if (process.env.TRUST_PROXY === 'true') {
+// Enable trust proxy for Render/production environments
+// This is required for rate limiting and getting correct client IPs behind proxies
+if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
+  console.log('[server] Trust proxy enabled for production');
 }
 
 app.use(cors(corsOptions));

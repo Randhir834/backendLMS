@@ -19,6 +19,12 @@ function buildPoolConfig() {
       connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS || 15000),
     };
 
+    // Force IPv4 to avoid IPv6 connection issues on Render
+    if (process.env.NODE_ENV === 'production') {
+      const dns = require('dns');
+      dns.setDefaultResultOrder('ipv4first');
+    }
+
     if (process.env.DB_SSL !== 'false') {
       config.ssl =
         process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true'
