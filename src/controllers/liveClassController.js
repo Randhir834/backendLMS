@@ -1,7 +1,6 @@
 const {
   findLiveClassesByCourse,
   findUpcomingLiveClasses,
-  findAllLiveClassesForStudent,
   findLiveClassById,
   findLiveClassesByInstructor,
   createLiveClass,
@@ -9,24 +8,20 @@ const {
   deleteLiveClassById,
   findCoursesWithLiveClassesByInstructor,
   findCoursesWithLiveClassesByStudent,
-  findEnrolledStudentsForLiveClass,
-  findAllLiveClasses,
-  findCoursesForFilter,
-  findInstructorsForFilter,
 } = require('../services/liveClassService');
 const { notifyStudentsAboutLiveClass } = require('../services/notificationService');
-const { query } = require('../config/database');
 
 const getLiveClasses = async (req, res, next) => {
   try {
+    // If course_id is provided, get classes for that course
     if (req.query.course_id) {
       const classes = await findLiveClassesByCourse(req.query.course_id);
       return res.json({ liveClasses: classes });
     }
 
-    // For students, get all classes they're enrolled in
+    // For students, get upcoming classes they're enrolled in
     if (req.user.role === 'student') {
-      const classes = await findAllLiveClassesForStudent(req.user.id);
+      const classes = await findUpcomingLiveClasses(req.user.id);
       return res.json({ liveClasses: classes });
     }
 
@@ -41,18 +36,10 @@ const getLiveClasses = async (req, res, next) => {
       return res.json({ liveClasses: classes });
     }
 
-    // For admins, get all live classes across the platform with optional filters
-    if (req.user.role === 'admin') {
-      const filters = {};
-      if (req.query.course_id) filters.course_id = req.query.course_id;
-      if (req.query.instructor_id) filters.instructor_id = req.query.instructor_id;
-      
-      const classes = await findAllLiveClasses(filters);
-      return res.json({ liveClasses: classes });
-    }
-
     return res.json({ liveClasses: [] });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };
 
 const getLiveClassById = async (req, res, next) => {
@@ -61,28 +48,24 @@ const getLiveClassById = async (req, res, next) => {
     if (!liveClass) {
       return res.status(404).json({ error: 'Live class not found' });
     }
-
-    // Get enrolled students for this live class
-    const students = await findEnrolledStudentsForLiveClass(req.params.id);
-    liveClass.students = students;
-
     res.json({ liveClass });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };
 
 const createLiveClassController = async (req, res, next) => {
   try {
-    const { course_id, title, description, meet_link, scheduled_at, duration_minutes, end_time } = req.body;
-    
+    const { course_id, lesson_id, section_id, title, description, meet_link, scheduled_at, duration_minutes } = req.body;
+
     // Validate required fields
     if (!course_id || !title || !meet_link || !scheduled_at) {
-      return res.status(400).json({ error: 'Missing required fields: course_id, title, meet_link, and scheduled_at are required' });
+      return res.status(400).json({ error: 'course_id, title, meet_link, and scheduled_at are required' });
     }
 
-    // Validate URL format
-    const urlPattern = /^https?:\/\/.+/;
-    if (!urlPattern.test(meet_link)) {
-      return res.status(400).json({ error: 'Invalid meet link format. Must be a valid URL starting with http:// or https://' });
+    // Validate Google Meet link format
+    if (!meet_link.includes('meet.google.com')) {
+      return res.status(400).json({ error: 'Invalid Google Meet link' });
     }
 
     // Validate scheduled_at is in the future
@@ -91,73 +74,127 @@ const createLiveClassController = async (req, res, next) => {
       return res.status(400).json({ error: 'Scheduled time must be in the future' });
     }
 
-    const liveClassData = {
+    const liveClass = await createLiveClass({
       course_id,
+      lesson_id: lesson_id || null,
+      section_id: section_id || null,
       title,
-      description,
+      description: description || '',
       meet_link,
       scheduled_at,
       duration_minutes: duration_minutes || 60,
-      end_time,
-      created_by: req.user.id
-    };
+      created_by: req.user.id,
+    });
 
-    const liveClass = await createLiveClass(liveClassData);
-    
-    // Optionally notify students about the new live class
+    res.status(201).json({
+      message: 'Live class scheduled successfully',
+      liveClass,
+    });
+
+    // Send notifications to enrolled students
     try {
-      await notifyStudentsAboutLiveClass(liveClass.id);
+      const instructorName = req.user.name || 'Your instructor';
+      await notifyStudentsAboutLiveClass({
+        courseId: course_id,
+        liveClassTitle: title,
+        instructorName,
+      });
     } catch (notificationError) {
       console.error('Failed to send notifications:', notificationError);
       // Don't fail the request if notifications fail
     }
 
-    res.status(201).json({ message: 'Live class scheduled successfully', liveClass });
-  } catch (error) { next(error); }
+    // Emit real-time update to enrolled students
+    if (global.io) {
+      try {
+        const { findStudentsByCourse } = require('../services/enrollmentService');
+        const studentIds = await findStudentsByCourse(course_id);
+        studentIds.forEach(studentId => {
+          global.io.to(`user-${studentId}`).emit('live-class-scheduled', {
+            liveClassId: liveClass.id,
+            title: liveClass.title,
+            courseId: course_id,
+            scheduledAt: liveClass.scheduled_at,
+            meetLink: liveClass.meet_link,
+          });
+        });
+      } catch (err) {
+        console.error('Failed to emit live class notification:', err);
+      }
+    }
+  } catch (error) {
+    next(error);
+  }
 };
 
 const updateLiveClass = async (req, res, next) => {
   try {
-    const liveClass = await updateLiveClassById(req.params.id, req.body);
-    res.json({ message: 'Live class updated successfully', liveClass });
-  } catch (error) { next(error); }
+    const liveClass = await findLiveClassById(req.params.id);
+    if (!liveClass) {
+      return res.status(404).json({ error: 'Live class not found' });
+    }
+
+    // Validate Google Meet link if provided
+    if (req.body.meet_link && !req.body.meet_link.includes('meet.google.com')) {
+      return res.status(400).json({ error: 'Invalid Google Meet link' });
+    }
+
+    // Validate scheduled_at is in the future if provided
+    if (req.body.scheduled_at) {
+      const scheduledDate = new Date(req.body.scheduled_at);
+      if (scheduledDate <= new Date()) {
+        return res.status(400).json({ error: 'Scheduled time must be in the future' });
+      }
+    }
+
+    const updated = await updateLiveClassById(req.params.id, req.body);
+    res.json({
+      message: 'Live class updated successfully',
+      liveClass: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 const deleteLiveClass = async (req, res, next) => {
   try {
+    const liveClass = await findLiveClassById(req.params.id);
+    if (!liveClass) {
+      return res.status(404).json({ error: 'Live class not found' });
+    }
+
     await deleteLiveClassById(req.params.id);
     res.json({ message: 'Live class deleted successfully' });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };
 
-const getFilterOptions = async (req, res, next) => {
-  try {
-    const [courses, instructors] = await Promise.all([
-      findCoursesForFilter(),
-      findInstructorsForFilter()
-    ]);
-    
-    res.json({ 
-      courses,
-      instructors
-    });
-  } catch (error) { next(error); }
-};
-
+// Get courses with their live classes for instructors
 const getCoursesWithLiveClasses = async (req, res, next) => {
   try {
     if (req.user.role === 'instructor') {
       const courses = await findCoursesWithLiveClassesByInstructor(req.user.id);
       return res.json({ courses });
     }
-    
+
     if (req.user.role === 'student') {
       const courses = await findCoursesWithLiveClassesByStudent(req.user.id);
       return res.json({ courses });
     }
 
-    return res.status(403).json({ error: 'Forbidden' });
-  } catch (error) { next(error); }
+    return res.json({ courses: [] });
+  } catch (error) {
+    next(error);
+  }
 };
 
-module.exports = { getLiveClasses, getLiveClassById, createLiveClassController, updateLiveClass, deleteLiveClass, getFilterOptions, getCoursesWithLiveClasses };
+module.exports = {
+  getLiveClasses,
+  getLiveClassById,
+  createLiveClassController,
+  updateLiveClass,
+  deleteLiveClass,
+  getCoursesWithLiveClasses,
+};

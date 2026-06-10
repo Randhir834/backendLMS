@@ -2,7 +2,7 @@ const { createTrialRequest, getAllTrialRequests } = require('../services/trialRe
 
 const requestTrial = async (req, res, next) => {
   try {
-    const { name, email, phone, grade } = req.body;
+    const { name, email, phone, grade, role = 'student' } = req.body;
 
     if (!name || !email || !phone) {
       return res.status(400).json({ error: 'Name, email, and phone are required.' });
@@ -14,7 +14,12 @@ const requestTrial = async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid email address format.' });
     }
 
-    const trialRequest = await createTrialRequest({ name, email, phone, grade });
+    // Validate role
+    if (!['student', 'instructor'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be either "student" or "instructor".' });
+    }
+
+    const trialRequest = await createTrialRequest({ name, email, phone, grade, role });
 
     res.status(201).json({
       message: 'Trial request received successfully.',

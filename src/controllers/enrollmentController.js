@@ -5,10 +5,10 @@ const {
   findEnrollmentByUserAndCourse,
   findAllEnrollments,
   findCourseEnrollments,
+  getCourseEnrollmentStats,
 } = require('../services/enrollmentService');
 const { createPaymentRecord } = require('../services/paymentService');
 const { findCourseById } = require('../services/courseService');
-const { EVENTS, emitToAll, emitToUser, notifyDashboardUpdate } = require('../services/realtimeService');
 
 const enrollCourse = async (req, res, next) => {
   try {
@@ -22,11 +22,6 @@ const enrollCourse = async (req, res, next) => {
 
     // Create enrollment first
     const enrollment = await createEnrollment({ user_id: req.user.id, course_id });
-    
-    // Emit real-time event
-    emitToAll(EVENTS.ENROLLMENT_CREATED, enrollment);
-    emitToUser(req.user.id, EVENTS.ENROLLMENT_CREATED, enrollment);
-    notifyDashboardUpdate();
     
     // If course has a price, create payment record
     if (course.price > 0) {
@@ -100,32 +95,26 @@ const getAllEnrollments = async (req, res, next) => {
   }
 };
 
-const getCourseEnrollments = async (req, res, next) => {
+// Get enrollments for a specific course (for instructors)
+const getCourseEnrollmentsController = async (req, res, next) => {
   try {
-    const { courseId } = req.params;
-    const { status, search, sort_by, sort_order } = req.query;
-    
-    // Verify that the instructor is assigned to this course (unless admin)
-    if (req.user.role === 'instructor') {
-      const { verifyInstructorCourseAccess } = require('../services/courseService');
-      const hasAccess = await verifyInstructorCourseAccess(req.user.id, courseId);
-      if (!hasAccess) {
-        return res.status(403).json({ 
-          error: 'You do not have access to this course. Please ensure you are assigned as an instructor for this course.' 
-        });
-      }
-    }
-    
+    const courseId = req.params.courseId;
     const filters = {};
-    if (status) filters.status = status;
-    if (search) filters.search = search;
-    if (sort_by) filters.sort_by = sort_by;
-    if (sort_order) filters.sort_order = sort_order;
+    
+    if (req.query.status) filters.status = req.query.status;
+    if (req.query.search) filters.search = req.query.search;
+    if (req.query.sort_by) filters.sort_by = req.query.sort_by;
+    if (req.query.sort_order) filters.sort_order = req.query.sort_order;
 
     const enrollments = await findCourseEnrollments(courseId, filters);
-    res.json({ enrollments });
+    const stats = await getCourseEnrollmentStats(courseId);
+    
+    res.json({ 
+      enrollments,
+      stats,
+      total: enrollments.length
+    });
   } catch (error) {
-    console.error('Error in getCourseEnrollments:', error);
     next(error);
   }
 };
@@ -136,5 +125,5 @@ module.exports = {
   getEnrollmentById,
   checkEnrollment,
   getAllEnrollments,
-  getCourseEnrollments,
+  getCourseEnrollmentsController,
 };

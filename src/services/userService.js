@@ -5,20 +5,6 @@ const findUserByEmail = async (email) => {
   return result.rows[0] || null;
 };
 
-const findUserByPhone = async (phone) => {
-  const result = await query('SELECT * FROM users WHERE phone = $1', [phone]);
-  return result.rows[0] || null;
-};
-
-const findUserByEmailOrPhone = async (identifier) => {
-  // Check if identifier is email (contains @) or phone number
-  if (identifier.includes('@')) {
-    return await findUserByEmail(identifier);
-  } else {
-    return await findUserByPhone(identifier);
-  }
-};
-
 const findUserById = async (id) => {
   const result = await query(
     'SELECT id, name, email, role, avatar_url, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization, created_at FROM users WHERE id = $1',
@@ -117,7 +103,8 @@ const updateUserById = async (id, { name, date_of_birth, school, grade, parent_g
   return user;
 };
 
-const updateUserPassword = async (id, hashedPassword) => {
+const updateUserPassword = async (id, hashedPassword, markAsChanged = false) => {
+  // Always update password, password_changed is already TRUE by default
   await query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashedPassword, id]);
 };
 
@@ -126,34 +113,4 @@ const getUserPasswordById = async (id) => {
   return result.rows[0]?.password || null;
 };
 
-const updateUserAvatar = async (id, avatarUrl) => {
-  const result = await query(
-    `UPDATE users SET
-      avatar_url = $1,
-      updated_at = NOW()
-     WHERE id = $2
-     RETURNING id, name, email, role, avatar_url, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization, created_at`,
-    [avatarUrl, id]
-  );
-  
-  const user = result.rows[0];
-  if (user && user.date_of_birth) {
-    const formattedDate = user.date_of_birth.toISOString().split('T')[0];
-    user.date_of_birth = formattedDate;
-    
-    const today = new Date();
-    const birthDate = new Date(formattedDate);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    
-    user.age = age;
-  }
-  
-  return user;
-};
-
-module.exports = { findUserByEmail, findUserByPhone, findUserByEmailOrPhone, findUserById, createUser, updateUserById, updateUserPassword, getUserPasswordById, updateUserAvatar };
+module.exports = { findUserByEmail, findUserById, createUser, updateUserById, updateUserPassword, getUserPasswordById };

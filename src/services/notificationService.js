@@ -59,7 +59,25 @@ const notifyUsersByRole = async ({ title, message, type, role }) => {
   return result.rows;
 };
 
+// Notify students enrolled in a course about a new live class
+const notifyStudentsAboutLiveClass = async ({ courseId, liveClassTitle, instructorName }) => {
+  const result = await query(
+    `INSERT INTO notifications (user_id, title, message, type)
+     SELECT e.user_id, $1, $2, 'live_class'
+     FROM enrollments e
+     WHERE e.course_id = $3 AND e.status = 'active'
+     RETURNING *`,
+    [
+      `New Live Class: ${liveClassTitle}`,
+      `Your instructor ${instructorName} has scheduled a new live class "${liveClassTitle}". Check your Live Classes section for details.`,
+      courseId
+    ]
+  );
+  return result.rows;
+};
+
 module.exports = {
   findNotificationsByUser, findUnreadCount, createNotification,
   markAsRead, markAllAsRead, deleteNotification, notifyAllUsers, notifyUsersByRole,
+  notifyStudentsAboutLiveClass,
 };

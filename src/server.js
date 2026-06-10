@@ -21,10 +21,9 @@ const server = http.createServer(app);
 // Configure Socket.IO with CORS
 const io = socketIo(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
     methods: ["GET", "POST"],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    credentials: true
   }
 });
 
@@ -52,11 +51,8 @@ io.on('connection', (socket) => {
   });
 });
 
-// Enable trust proxy for Render/production environments
-// This is required for rate limiting and getting correct client IPs behind proxies
-if (process.env.NODE_ENV === 'production') {
+if (process.env.TRUST_PROXY === 'true') {
   app.set('trust proxy', 1);
-  console.log('[server] Trust proxy enabled for production');
 }
 
 app.use(cors(corsOptions));
@@ -66,35 +62,17 @@ app.use(requestLogger);
 
 // Serve uploaded files publicly (no authentication required for images)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
-  setHeaders: (res, filePath) => {
+  setHeaders: (res, path) => {
     // Set security headers for uploaded files
     res.set({
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
+      'Cache-Control': 'public, max-age=3600',
       'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'SAMEORIGIN', // Allow iframe viewing from same origin
+      'X-Frame-Options': 'DENY',
     });
   }
 }));
 
 app.use('/api', routes);
-
-// Home route
-app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'PlayFit LMS Backend Running Successfully',
-    version: '1.0.0',
-    environment: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      health: '/health',
-      api: '/api',
-      documentation: 'See API routes in /api'
-    }
-  });
-});
 
 app.get('/health', (req, res) => {
   res.json({

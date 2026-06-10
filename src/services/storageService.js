@@ -1,5 +1,6 @@
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { getSupabaseClient } = require('../config/supabase');
 
 const ALLOWED_MIME_TYPES = [
@@ -10,6 +11,7 @@ const ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
   'image/webp',
+  'image/gif',
 ];
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -28,41 +30,48 @@ const upload = multer({
   },
 });
 
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const uploadToSupabase = async (file, folder = 'general') => {
-  const supabase = getSupabaseClient();
   const ext = path.extname(file.originalname);
   const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}${ext}`;
+  const filePath = path.join(uploadsDir, fileName);
 
-  const { data, error } = await supabase.storage
-    .from(process.env.SUPABASE_BUCKET)
-    .upload(fileName, file.buffer, {
-      contentType: file.mimetype,
-      upsert: false,
-    });
+  try {
+    // Create folder if it doesn't exist
+    const folderPath = path.dirname(filePath);
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath, { recursive: true });
+    }
 
-  if (error) {
-    throw new Error(`Upload failed: ${error.message}`);
+    // Save file locally
+    fs.writeFileSync(filePath, file.buffer);
+
+    // Generate public URL (assuming uploads are served from /uploads)
+    const publicUrl = `${process.env.API_URL || 'http://localhost:5001'}/uploads/${fileName}`;
+
+    return {
+      path: fileName,
+      publicUrl: publicUrl,
+    };
+  } catch (err) {
+    console.error('Upload error details:', err);
+    throw new Error(`Upload failed: ${err.message}`);
   }
-
-  const { data: urlData } = supabase.storage
-    .from(process.env.SUPABASE_BUCKET)
-    .getPublicUrl(fileName);
-
-  return {
-    path: data.path,
-    publicUrl: urlData.publicUrl,
-  };
 };
 
 const deleteFromSupabase = async (filePath) => {
-  const supabase = getSupabaseClient();
-
-  const { error } = await supabase.storage
-    .from(process.env.SUPABASE_BUCKET)
-    .remove([filePath]);
-
-  if (error) {
-    throw new Error(`Delete failed: ${error.message}`);
+  try {
+    const fullPath = path.join(uploadsDir, filePath);
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+  } catch (err) {
+    throw new Error(`Delete failed: ${err.message}`);
   }
 };
 

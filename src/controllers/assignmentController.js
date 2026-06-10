@@ -1,10 +1,9 @@
 const {
   findAssignmentsByCourse, findAllAssignments, findAssignmentById, createAssignment, updateAssignmentById, deleteAssignmentById,
   assignAssignmentToStudents, assignAssignmentToAllEnrolled, getAssignmentAssignments, removeAssignmentAssignment,
-  submitAssignment, findSubmissionsByAssignment, findSubmissionHistoryByStudent, findSubmissionsByStudent, getStudentAssignments, gradeSubmission,
+  submitAssignment, findSubmissionsByAssignment, findSubmissionsByStudent, getStudentAssignments, gradeSubmission,
   getAssignmentStatistics,
 } = require('../services/assignmentService');
-const { EVENTS, emitToAll, emitToUser, notifyDashboardUpdate } = require('../services/realtimeService');
 
 const getAssignments = async (req, res, next) => {
   try {
@@ -20,8 +19,8 @@ const getAssignments = async (req, res, next) => {
       const { query } = require('../config/database');
       const result = await query(
         `SELECT a.*, c.title as course_title,
-         COALESCE((SELECT COUNT(*)::INTEGER FROM assignment_submissions WHERE assignment_id = a.id), 0) as submission_count,
-         COALESCE((SELECT COUNT(DISTINCT student_id)::INTEGER FROM assignment_submissions WHERE assignment_id = a.id), 0) as student_count
+         (SELECT COUNT(*) FROM assignment_submissions WHERE assignment_id = a.id) as submission_count,
+         (SELECT COUNT(DISTINCT student_id) FROM assignment_submissions WHERE assignment_id = a.id) as student_count
          FROM assignments a
          LEFT JOIN courses c ON a.course_id = c.id
          WHERE a.created_by = $1
@@ -60,10 +59,6 @@ const createAssignmentController = async (req, res, next) => {
       await assignAssignmentToStudents(assignment.id, req.body.student_ids);
     }
     
-    // Emit real-time event
-    emitToAll(EVENTS.ASSIGNMENT_CREATED, assignment);
-    notifyDashboardUpdate();
-    
     res.status(201).json({ message: 'Assignment created successfully', assignment });
   } catch (error) { next(error); }
 };
@@ -71,11 +66,6 @@ const createAssignmentController = async (req, res, next) => {
 const updateAssignment = async (req, res, next) => {
   try {
     const assignment = await updateAssignmentById(req.params.id, req.body);
-    
-    // Emit real-time event
-    emitToAll(EVENTS.ASSIGNMENT_UPDATED, assignment);
-    notifyDashboardUpdate();
-    
     res.json({ message: 'Assignment updated successfully', assignment });
   } catch (error) { next(error); }
 };
@@ -83,11 +73,6 @@ const updateAssignment = async (req, res, next) => {
 const deleteAssignment = async (req, res, next) => {
   try {
     await deleteAssignmentById(req.params.id);
-    
-    // Emit real-time event
-    emitToAll(EVENTS.ASSIGNMENT_DELETED, { id: req.params.id });
-    notifyDashboardUpdate();
-    
     res.json({ message: 'Assignment deleted successfully' });
   } catch (error) { next(error); }
 };
@@ -95,11 +80,6 @@ const deleteAssignment = async (req, res, next) => {
 const submitAssignmentController = async (req, res, next) => {
   try {
     const submission = await submitAssignment({ ...req.body, student_id: req.user.id });
-    
-    // Emit real-time event
-    emitToAll(EVENTS.ASSIGNMENT_SUBMITTED, submission);
-    notifyDashboardUpdate();
-    
     res.status(201).json({ message: 'Assignment submitted successfully', submission });
   } catch (error) { next(error); }
 };
@@ -108,10 +88,7 @@ const getSubmissions = async (req, res, next) => {
   try {
     const submissions = await findSubmissionsByAssignment(req.params.id);
     res.json({ submissions });
-  } catch (error) {
-    console.error('[getSubmissions] Error:', error);
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
 const getMySubmissions = async (req, res, next) => {
@@ -123,28 +100,9 @@ const getMySubmissions = async (req, res, next) => {
 
 const gradeSubmissionController = async (req, res, next) => {
   try {
-    const submission = await gradeSubmission(req.params.submissionId, req.body, req.user.id);
-    
-    // Emit real-time event
-    emitToAll(EVENTS.ASSIGNMENT_GRADED, submission);
-    if (submission.student_id) {
-      emitToUser(submission.student_id, EVENTS.ASSIGNMENT_GRADED, submission);
-    }
-    notifyDashboardUpdate();
-    
+    const submission = await gradeSubmission(req.params.submissionId, req.body);
     res.json({ message: 'Submission graded successfully', submission });
   } catch (error) { next(error); }
-};
-
-const getSubmissionHistory = async (req, res, next) => {
-  try {
-    const { assignment_id, student_id } = req.params;
-    const history = await findSubmissionHistoryByStudent(assignment_id, student_id);
-    res.json({ history });
-  } catch (error) {
-    console.error('[getSubmissionHistory] Error:', error);
-    next(error);
-  }
 };
 
 // New controller functions
@@ -172,10 +130,7 @@ const getAssignedStudents = async (req, res, next) => {
   try {
     const assignments = await getAssignmentAssignments(req.params.assignment_id);
     res.json({ assignments });
-  } catch (error) {
-    console.error('[getAssignedStudents] Error:', error);
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
 const removeAssignment = async (req, res, next) => {
@@ -189,14 +144,11 @@ const getStatistics = async (req, res, next) => {
   try {
     const statistics = await getAssignmentStatistics(req.params.assignment_id);
     res.json({ statistics });
-  } catch (error) {
-    console.error('[getStatistics] Error:', error);
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
 module.exports = {
   getAssignments, getAssignmentById, createAssignmentController, updateAssignment, deleteAssignment,
-  submitAssignmentController, getSubmissions, getMySubmissions, gradeSubmissionController, getSubmissionHistory,
+  submitAssignmentController, getSubmissions, getMySubmissions, gradeSubmissionController,
   assignStudents, getAssignedStudents, removeAssignment, getStatistics,
 };

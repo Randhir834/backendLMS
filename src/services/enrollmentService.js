@@ -120,16 +120,13 @@ const findCourseEnrollments = async (course_id, filters = {}) => {
       u.name AS student_name,
       u.email AS student_email,
       u.phone AS student_phone,
-      u.avatar_url,
       u.date_of_birth,
       u.grade,
       (SELECT COUNT(*) FROM lesson_progress lp 
        JOIN lessons l ON lp.lesson_id = l.id 
-       JOIN sections s ON l.section_id = s.id
-       WHERE lp.student_id = e.user_id AND s.course_id = e.course_id AND lp.status = 'completed') AS completed_lessons,
+       WHERE lp.student_id = e.user_id AND l.course_id = e.course_id AND lp.status = 'completed') AS completed_lessons,
       (SELECT COUNT(*) FROM lessons l 
-       JOIN sections s ON l.section_id = s.id
-       WHERE s.course_id = e.course_id) AS total_lessons
+       WHERE l.course_id = e.course_id) AS total_lessons
     FROM enrollments e
     JOIN users u ON e.user_id = u.id
     WHERE e.course_id = $1
@@ -145,10 +142,9 @@ const findCourseEnrollments = async (course_id, filters = {}) => {
   }
 
   if (search) {
-    sql += ` AND (LOWER(u.name) LIKE $${paramIdx} OR LOWER(u.email) LIKE $${paramIdx + 1})`;
+    sql += ` AND (LOWER(u.name) LIKE $${paramIdx} OR LOWER(u.email) LIKE $${paramIdx})`;
     params.push(`%${search.toLowerCase()}%`);
-    params.push(`%${search.toLowerCase()}%`);
-    paramIdx += 2;
+    paramIdx++;
   }
 
   // Add sorting

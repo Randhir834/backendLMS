@@ -2,11 +2,6 @@ require('dotenv').config();
 
 const { Pool } = require('pg');
 
-// Force IPv4 to avoid IPv6 connection issues - MUST be set before Pool creation
-const dns = require('dns');
-dns.setDefaultResultOrder('ipv4first');
-console.log('[database] DNS set to prefer IPv4');
-
 /**
  * Supports local PostgreSQL (discrete env vars) or a single connection string
  * (recommended for Supabase, Neon, RDS): DATABASE_URL
@@ -24,7 +19,6 @@ function buildPoolConfig() {
       connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS || 15000),
     };
 
-    // Enable SSL for Supabase connections
     if (process.env.DB_SSL !== 'false') {
       config.ssl =
         process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true'

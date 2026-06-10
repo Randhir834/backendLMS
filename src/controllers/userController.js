@@ -1,8 +1,5 @@
-const { findUserById, updateUserById, updateUserPassword, getUserPasswordById, updateUserAvatar } = require('../services/userService');
-const { EVENTS, emitToAll, emitToUser, notifyDashboardUpdate } = require('../services/realtimeService');
+const { findUserById, updateUserById, updateUserPassword, getUserPasswordById } = require('../services/userService');
 const bcrypt = require('bcryptjs');
-const fs = require('fs');
-const path = require('path');
 
 const getProfile = async (req, res, next) => {
   try {
@@ -20,11 +17,6 @@ const updateProfile = async (req, res, next) => {
   try {
     const { name, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization } = req.body;
     const user = await updateUserById(req.user.id, { name, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization });
-    
-    // Emit real-time event
-    emitToUser(req.user.id, EVENTS.USER_UPDATED, user);
-    notifyDashboardUpdate();
-    
     res.json({ message: 'Profile updated successfully', user });
   } catch (error) {
     next(error);
@@ -58,7 +50,7 @@ const changePassword = async (req, res, next) => {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
-    await updateUserPassword(req.user.id, hashedPassword);
+    await updateUserPassword(req.user.id, hashedPassword, true);
 
     res.json({ message: 'Password changed successfully.' });
   } catch (error) {
@@ -66,64 +58,4 @@ const changePassword = async (req, res, next) => {
   }
 };
 
-const uploadProfilePhoto = async (req, res, next) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded.' });
-    }
-
-    const user = await findUserById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-
-    // Delete old profile photo if it exists
-    if (user.avatar_url) {
-      const oldPhotoPath = path.join(__dirname, '../../uploads', user.avatar_url.replace('/uploads/', ''));
-      if (fs.existsSync(oldPhotoPath)) {
-        fs.unlinkSync(oldPhotoPath);
-      }
-    }
-
-    // Update user with new avatar URL
-    const avatarUrl = `/uploads/profile-photos/${req.file.filename}`;
-    const updatedUser = await updateUserAvatar(req.user.id, avatarUrl);
-
-    res.json({ 
-      message: 'Profile photo uploaded successfully.', 
-      avatar_url: avatarUrl,
-      user: updatedUser 
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const deleteProfilePhoto = async (req, res, next) => {
-  try {
-    const user = await findUserById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-
-    // Delete old profile photo if it exists
-    if (user.avatar_url) {
-      const oldPhotoPath = path.join(__dirname, '../../uploads', user.avatar_url.replace('/uploads/', ''));
-      if (fs.existsSync(oldPhotoPath)) {
-        fs.unlinkSync(oldPhotoPath);
-      }
-    }
-
-    // Update user to remove avatar URL
-    const updatedUser = await updateUserAvatar(req.user.id, null);
-
-    res.json({ 
-      message: 'Profile photo deleted successfully.', 
-      user: updatedUser 
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-module.exports = { getProfile, updateProfile, changePassword, uploadProfilePhoto, deleteProfilePhoto };
+module.exports = { getProfile, updateProfile, changePassword };
