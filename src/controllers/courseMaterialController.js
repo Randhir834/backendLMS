@@ -204,17 +204,22 @@ const serveSecureFile = catchAsync(async (req, res) => {
 const deleteMaterial = catchAsync(async (req, res) => {
   const { materialId } = req.params;
   
-  const deletedMaterial = await deleteCourseMaterial(materialId, req.user.id, req.user.role);
+  // Log deletion BEFORE deleting the material (to avoid foreign key constraint error)
+  try {
+    await logMaterialAccess(
+      materialId,
+      req.user.id,
+      'delete',
+      req.ip,
+      req.get('User-Agent'),
+      true
+    );
+  } catch (logError) {
+    console.error('Failed to log material deletion:', logError);
+    // Continue with deletion even if logging fails
+  }
 
-  // Log deletion
-  await logMaterialAccess(
-    materialId,
-    req.user.id,
-    'delete',
-    req.ip,
-    req.get('User-Agent'),
-    true
-  );
+  const deletedMaterial = await deleteCourseMaterial(materialId, req.user.id, req.user.role);
 
   res.json({
     success: true,

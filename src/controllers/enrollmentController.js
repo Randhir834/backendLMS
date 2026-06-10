@@ -99,6 +99,24 @@ const getAllEnrollments = async (req, res, next) => {
 const getCourseEnrollmentsController = async (req, res, next) => {
   try {
     const courseId = req.params.courseId;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    // If the user is an instructor (not admin), verify they teach this course
+    if (userRole === 'instructor') {
+      const { query } = require('../config/database');
+      const instructorCheck = await query(
+        'SELECT id FROM course_instructors WHERE course_id = $1 AND instructor_id = $2',
+        [courseId, userId]
+      );
+      
+      if (instructorCheck.rows.length === 0) {
+        return res.status(403).json({ 
+          error: 'Access denied. You are not an instructor for this course.' 
+        });
+      }
+    }
+    
     const filters = {};
     
     if (req.query.status) filters.status = req.query.status;

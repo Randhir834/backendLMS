@@ -11,6 +11,10 @@ const {
 
 const router = express.Router();
 
+// Attempt viewing (must come before /:id routes)
+router.get('/my-attempts', authenticate, authorizeRoles('student'), getMyAttempts);
+router.get('/attempts/:attemptId', authenticate, getAttemptDetails);
+
 // Quiz CRUD
 router.get('/', authenticate, getQuizzes);
 router.get('/:id', authenticate, getQuizById);
@@ -33,10 +37,8 @@ router.post('/:id/attempt', authenticate, authorizeRoles('student'), startQuizAt
 router.post('/attempts/:attemptId/answer', authenticate, authorizeRoles('student'), submitQuizAnswer);
 router.post('/attempts/:attemptId/complete', authenticate, authorizeRoles('student'), completeQuizAttempt);
 
-// Attempt viewing
-router.get('/my-attempts/list', authenticate, authorizeRoles('student'), getMyAttempts);
+// More attempt viewing
 router.get('/:quiz_id/attempts', authenticate, authorizeRoles('instructor', 'admin'), getQuizAttempts);
-router.get('/attempts/:attemptId', authenticate, getAttemptDetails);
 
 // Statistics
 router.get('/:quiz_id/statistics', authenticate, authorizeRoles('instructor', 'admin'), getStatistics);

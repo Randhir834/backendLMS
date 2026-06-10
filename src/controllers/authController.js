@@ -86,17 +86,18 @@ const login = async (req, res, next) => {
 
     const user = await findUserByEmailOrPhone(loginIdentifier);
     if (!user) {
-      return res.status(401).json({ error: "You don't have an account." });
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Your password is wrong.' });
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
-    if (expectedRole && user.role !== expectedRole) {
-      return res.status(403).json({
-        error: 'This account is not valid for this portal. Use the login page that matches your role (student, instructor, or admin).',
+    // Check role match with case-insensitive comparison and better error messaging
+    if (expectedRole && user.role.toLowerCase() !== expectedRole.toLowerCase()) {
+      return res.status(401).json({
+        error: `Invalid credentials. This portal is for ${expectedRole}s only. Your account is registered as a ${user.role}.`,
       });
     }
 

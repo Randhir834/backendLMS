@@ -12,7 +12,7 @@ const allowedOrigins = parseOrigins();
 
 const corsOptions = {
   origin(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (like mobile apps, curl requests, or Postman)
     if (!origin) {
       return callback(null, true);
     }
@@ -22,17 +22,19 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    // In production, log but still allow to prevent complete block
-    console.warn(`[cors] Request from origin: ${origin}`);
-    console.warn(`[cors] Allowed origins: ${allowedOrigins.join(', ')}`);
+    // Log but allow to prevent blocking legitimate requests
+    console.warn(`[cors] Request from unlisted origin: ${origin}`);
+    console.warn(`[cors] Configured origins: ${allowedOrigins.join(', ')}`);
     
-    // Allow the request anyway (CORS headers will be set)
+    // Allow the request anyway (for development flexibility)
     return callback(null, true);
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
   credentials: true,
-  optionsSuccessStatus: 200,
+  preflightContinue: false,
+  optionsSuccessStatus: 204, // Some legacy browsers choke on 204
   maxAge: 86400,
 };
 

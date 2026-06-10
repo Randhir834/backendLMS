@@ -5,6 +5,14 @@ const findUserByEmail = async (email) => {
   return result.rows[0] || null;
 };
 
+const findUserByEmailOrPhone = async (identifier) => {
+  const result = await query(
+    'SELECT * FROM users WHERE email = $1 OR phone = $1',
+    [identifier]
+  );
+  return result.rows[0] || null;
+};
+
 const findUserById = async (id) => {
   const result = await query(
     'SELECT id, name, email, role, avatar_url, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization, created_at FROM users WHERE id = $1',
@@ -113,4 +121,4 @@ const getUserPasswordById = async (id) => {
   return result.rows[0]?.password || null;
 };
 
-module.exports = { findUserByEmail, findUserById, createUser, updateUserById, updateUserPassword, getUserPasswordById };
+module.exports = { findUserByEmail, findUserByEmailOrPhone, findUserById, createUser, updateUserById, updateUserPassword, getUserPasswordById };

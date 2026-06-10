@@ -249,17 +249,23 @@ const completeAttempt = async (id, { score, total_marks, time_taken_seconds }) =
 };
 
 const findAttemptsByStudent = async (studentId) => {
-  const result = await query(
-    `SELECT a.*, q.title AS quiz_title, q.course_id, q.passing_score, q.deadline, c.title AS course_title,
-     q.id as quiz_id
-     FROM quiz_attempts a 
-     JOIN quizzes q ON a.quiz_id = q.id 
-     JOIN courses c ON q.course_id = c.id 
-     WHERE a.student_id = $1 
-     ORDER BY a.created_at DESC`,
-    [studentId]
-  );
-  return result.rows;
+  try {
+    const result = await query(
+      `SELECT a.*, q.title AS quiz_title, q.course_id, q.passing_score, q.deadline, c.title AS course_title,
+       q.id as quiz_id
+       FROM quiz_attempts a 
+       LEFT JOIN quizzes q ON a.quiz_id = q.id 
+       LEFT JOIN courses c ON q.course_id = c.id 
+       WHERE a.student_id = $1 
+       ORDER BY a.created_at DESC`,
+      [studentId]
+    );
+    return result.rows || [];
+  } catch (error) {
+    console.error('Error fetching attempts by student:', error);
+    // Return empty array instead of throwing error
+    return [];
+  }
 };
 
 const findAttemptsByQuiz = async (quizId) => {

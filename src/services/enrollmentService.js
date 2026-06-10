@@ -114,7 +114,6 @@ const findCourseEnrollments = async (course_id, filters = {}) => {
       e.user_id,
       e.course_id,
       e.status,
-      e.progress,
       e.enrolled_at,
       e.completed_at,
       u.name AS student_name,
@@ -124,9 +123,11 @@ const findCourseEnrollments = async (course_id, filters = {}) => {
       u.grade,
       (SELECT COUNT(*) FROM lesson_progress lp 
        JOIN lessons l ON lp.lesson_id = l.id 
-       WHERE lp.student_id = e.user_id AND l.course_id = e.course_id AND lp.status = 'completed') AS completed_lessons,
+       JOIN sections s ON l.section_id = s.id
+       WHERE lp.student_id = e.user_id AND s.course_id = e.course_id AND lp.status = 'completed') AS completed_lessons,
       (SELECT COUNT(*) FROM lessons l 
-       WHERE l.course_id = e.course_id) AS total_lessons
+       JOIN sections s ON l.section_id = s.id
+       WHERE s.course_id = e.course_id) AS total_lessons
     FROM enrollments e
     JOIN users u ON e.user_id = u.id
     WHERE e.course_id = $1
@@ -148,7 +149,7 @@ const findCourseEnrollments = async (course_id, filters = {}) => {
   }
 
   // Add sorting
-  const validSortFields = ['enrolled_at', 'progress', 'student_name', 'completed_at'];
+  const validSortFields = ['enrolled_at', 'student_name', 'completed_at'];
   const sortField = validSortFields.includes(sort_by) ? sort_by : 'enrolled_at';
   const sortDirection = sort_order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
   
@@ -171,8 +172,6 @@ const getCourseEnrollmentStats = async (course_id) => {
       COUNT(*) AS total_students,
       COUNT(*) FILTER (WHERE status = 'active') AS active_students,
       COUNT(*) FILTER (WHERE status = 'completed') AS completed_students,
-      COUNT(*) FILTER (WHERE progress = 100) AS students_completed_course,
-      ROUND(AVG(progress), 2) AS average_progress,
       COUNT(*) FILTER (WHERE enrolled_at >= NOW() - INTERVAL '7 days') AS new_enrollments_week,
       COUNT(*) FILTER (WHERE enrolled_at >= NOW() - INTERVAL '30 days') AS new_enrollments_month
     FROM enrollments
