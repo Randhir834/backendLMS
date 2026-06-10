@@ -41,7 +41,7 @@ const findLiveClassesByInstructor = async (instructorId, filters = {}) => {
   const { status, course_id, search } = filters;
   
   let sql = `
-    SELECT lc.*, c.title AS course_title, u.name AS created_by_name
+    SELECT lc.*, c.title AS course_title, c.thumbnail_url, u.name AS created_by_name
     FROM live_classes lc
     JOIN courses c ON lc.course_id = c.id
     JOIN course_instructors ci ON c.id = ci.course_id
