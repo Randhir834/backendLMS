@@ -144,4 +144,20 @@ const getFilterOptions = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getLiveClasses, getLiveClassById, createLiveClassController, updateLiveClass, deleteLiveClass, getFilterOptions };
+const getCoursesWithLiveClasses = async (req, res, next) => {
+  try {
+    if (req.user.role === 'instructor') {
+      const courses = await findCoursesWithLiveClassesByInstructor(req.user.id);
+      return res.json({ courses });
+    }
+    
+    if (req.user.role === 'student') {
+      const courses = await findCoursesWithLiveClassesByStudent(req.user.id);
+      return res.json({ courses });
+    }
+
+    return res.status(403).json({ error: 'Forbidden' });
+  } catch (error) { next(error); }
+};
+
+module.exports = { getLiveClasses, getLiveClassById, createLiveClassController, updateLiveClass, deleteLiveClass, getFilterOptions, getCoursesWithLiveClasses };
