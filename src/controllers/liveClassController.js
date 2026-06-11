@@ -8,6 +8,7 @@ const {
   deleteLiveClassById,
   findCoursesWithLiveClassesByInstructor,
   findCoursesWithLiveClassesByStudent,
+  findAllLiveClassesForAdmin,
 } = require('../services/liveClassService');
 const { notifyStudentsAboutLiveClass } = require('../services/notificationService');
 
@@ -33,6 +34,20 @@ const getLiveClasses = async (req, res, next) => {
       if (req.query.search) filters.search = req.query.search;
 
       const classes = await findLiveClassesByInstructor(req.user.id, filters);
+      return res.json({ liveClasses: classes });
+    }
+
+    // For admins, get all live classes with filters
+    if (req.user.role === 'admin') {
+      const filters = {};
+      if (req.query.status) filters.status = req.query.status;
+      if (req.query.instructor_id) filters.instructor_id = req.query.instructor_id;
+      if (req.query.course_id) filters.course_id = req.query.course_id;
+      if (req.query.search) filters.search = req.query.search;
+      if (req.query.date_from) filters.date_from = req.query.date_from;
+      if (req.query.date_to) filters.date_to = req.query.date_to;
+
+      const classes = await findAllLiveClassesForAdmin(filters);
       return res.json({ liveClasses: classes });
     }
 

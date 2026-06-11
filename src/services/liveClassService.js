@@ -193,6 +193,67 @@ const findCoursesWithLiveClassesByStudent = async (studentId) => {
   return result.rows;
 };
 
+// Get all live classes for admin with optional filters
+const findAllLiveClassesForAdmin = async (filters = {}) => {
+  const { status, instructor_id, course_id, search, date_from, date_to } = filters;
+  
+  let sql = `
+    SELECT lc.*, 
+           c.title AS course_title, 
+           c.thumbnail_url, 
+           u.name AS instructor_name,
+           u.id AS instructor_id
+    FROM live_classes lc
+    JOIN courses c ON lc.course_id = c.id
+    LEFT JOIN users u ON lc.created_by = u.id
+    WHERE 1=1
+  `;
+  
+  const params = [];
+  let paramIdx = 1;
+
+  if (status) {
+    sql += ` AND lc.status = $${paramIdx}`;
+    params.push(status);
+    paramIdx++;
+  }
+
+  if (instructor_id) {
+    sql += ` AND lc.created_by = $${paramIdx}`;
+    params.push(instructor_id);
+    paramIdx++;
+  }
+
+  if (course_id) {
+    sql += ` AND lc.course_id = $${paramIdx}`;
+    params.push(course_id);
+    paramIdx++;
+  }
+
+  if (search) {
+    sql += ` AND (LOWER(lc.title) LIKE $${paramIdx} OR LOWER(c.title) LIKE $${paramIdx} OR LOWER(u.name) LIKE $${paramIdx})`;
+    params.push(`%${search.toLowerCase()}%`);
+    paramIdx++;
+  }
+
+  if (date_from) {
+    sql += ` AND lc.scheduled_at >= $${paramIdx}`;
+    params.push(date_from);
+    paramIdx++;
+  }
+
+  if (date_to) {
+    sql += ` AND lc.scheduled_at <= $${paramIdx}`;
+    params.push(date_to);
+    paramIdx++;
+  }
+
+  sql += ` ORDER BY lc.scheduled_at DESC`;
+
+  const result = await query(sql, params);
+  return result.rows;
+};
+
 module.exports = {
   findLiveClassesByCourse,
   findUpcomingLiveClasses,
@@ -203,4 +264,5 @@ module.exports = {
   deleteLiveClassById,
   findCoursesWithLiveClassesByInstructor,
   findCoursesWithLiveClassesByStudent,
+  findAllLiveClassesForAdmin,
 };
