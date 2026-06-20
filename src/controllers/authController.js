@@ -163,9 +163,46 @@ const forgotPassword = async (req, res, next) => {
       const origin = (clientOrigin || process.env.APP_ORIGIN || 'http://localhost:3000').replace(/\/$/, '');
       const path = '/reset-password';
       const link = `${origin}${path}?token=${token}`;
-      const subject = 'Reset your password';
-      const html = `<p>We received a request to reset your password.</p><p><a href="${link}">Create new password</a></p><p>If you did not request this, you can ignore this email.</p>`;
-      const text = `Reset your password: ${link}`;
+      const subject = 'Reset Your Playfit Password';
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">🔐 Password Reset</h1>
+          </div>
+          <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
+            <p style="font-size: 16px; margin-bottom: 20px;">Hello,</p>
+            <p style="font-size: 16px; margin-bottom: 20px;">We received a request to reset the password for your <strong>Playfit ${expectedRole || 'user'}</strong> account.</p>
+            <p style="font-size: 16px; margin-bottom: 25px;">Click the button below to create a new password. This link will expire in <strong>10 minutes</strong> for security reasons.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${link}" style="background: #1E88E5; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Reset Password</a>
+            </div>
+            <p style="font-size: 14px; color: #666; margin-top: 25px;">If the button doesn't work, copy and paste this link into your browser:</p>
+            <p style="font-size: 13px; color: #1E88E5; word-break: break-all; background: #f5f5f5; padding: 10px; border-radius: 5px;">${link}</p>
+            <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+            <p style="font-size: 14px; color: #666; margin-top: 20px;"><strong>Didn't request this?</strong><br>If you didn't ask to reset your password, you can safely ignore this email. Your password will remain unchanged.</p>
+            <p style="font-size: 13px; color: #999; margin-top: 30px; text-align: center;">© ${new Date().getFullYear()} Playfit. All rights reserved.</p>
+          </div>
+        </body>
+        </html>
+      `;
+      const text = `
+Hello,
+
+We received a request to reset the password for your Playfit ${expectedRole || 'user'} account.
+
+Click the link below to create a new password. This link will expire in 10 minutes:
+${link}
+
+If you didn't request this password reset, you can safely ignore this email.
+
+© ${new Date().getFullYear()} Playfit
+      `;
 
       // Always send to email even if user searched by phone
       const result = await sendEmail({
@@ -176,13 +213,20 @@ const forgotPassword = async (req, res, next) => {
       });
 
       if (!result.sent) {
-        console.log(`[playfit-lms] Password reset for ${user.email} (${user.role}): ${link}`);
+        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`📧 PASSWORD RESET LINK (Development Mode)`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`Email: ${user.email}`);
+        console.log(`Role: ${user.role}`);
+        console.log(`Link: ${link}`);
+        console.log(`Expires in: 10 minutes`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
       }
     }
 
     res.json({
       message:
-        'If an account exists for this email or phone number, password reset instructions have been sent to the registered email address. Check your email or server logs in development.',
+        'If an account exists with that email, password reset instructions have been sent. Please check your email inbox and spam folder. The reset link will expire in 10 minutes.',
     });
   } catch (error) {
     next(error);

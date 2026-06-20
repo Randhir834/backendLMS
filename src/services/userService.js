@@ -71,22 +71,66 @@ const createUser = async ({ name, email, password, role, date_of_birth, school, 
   return user;
 };
 
-const updateUserById = async (id, { name, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization }) => {
+const updateUserById = async (id, { name, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization, avatar_url }) => {
+  // Build dynamic query parts
+  const updates = [];
+  const values = [];
+  let paramCount = 1;
+
+  if (name !== undefined) {
+    updates.push(`name = $${paramCount++}`);
+    values.push(name);
+  }
+  if (date_of_birth !== undefined) {
+    updates.push(`date_of_birth = $${paramCount++}`);
+    values.push(date_of_birth);
+  }
+  if (school !== undefined) {
+    updates.push(`school = $${paramCount++}`);
+    values.push(school);
+  }
+  if (grade !== undefined) {
+    updates.push(`grade = $${paramCount++}`);
+    values.push(grade);
+  }
+  if (parent_guardian_name !== undefined) {
+    updates.push(`parent_guardian_name = $${paramCount++}`);
+    values.push(parent_guardian_name);
+  }
+  if (phone !== undefined) {
+    updates.push(`phone = $${paramCount++}`);
+    values.push(phone);
+  }
+  if (location !== undefined) {
+    updates.push(`location = $${paramCount++}`);
+    values.push(location);
+  }
+  if (qualifications !== undefined) {
+    updates.push(`qualifications = $${paramCount++}`);
+    values.push(qualifications);
+  }
+  if (specialization !== undefined) {
+    updates.push(`specialization = $${paramCount++}`);
+    values.push(specialization);
+  }
+  if (avatar_url !== undefined) {
+    updates.push(`avatar_url = $${paramCount++}`);
+    values.push(avatar_url);
+  }
+
+  if (updates.length === 0) {
+    // No updates to perform, just return the current user
+    return findUserById(id);
+  }
+
+  updates.push('updated_at = NOW()');
+  values.push(id);
+
   const result = await query(
-    `UPDATE users SET
-      name = COALESCE($1, name),
-      date_of_birth = COALESCE($2, date_of_birth),
-      school = COALESCE($3, school),
-      grade = COALESCE($4, grade),
-      parent_guardian_name = COALESCE($5, parent_guardian_name),
-      phone = COALESCE($6, phone),
-      location = COALESCE($7, location),
-      qualifications = COALESCE($8, qualifications),
-      specialization = COALESCE($9, specialization),
-      updated_at = NOW()
-     WHERE id = $10
+    `UPDATE users SET ${updates.join(', ')}
+     WHERE id = $${paramCount}
      RETURNING id, name, email, role, avatar_url, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization, created_at`,
-    [name, date_of_birth, school, grade, parent_guardian_name, phone, location, qualifications, specialization, id]
+    values
   );
   
   const user = result.rows[0];

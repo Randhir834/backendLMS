@@ -8,7 +8,7 @@ CREATE TABLE system_settings (
 
 -- Insert default settings
 INSERT INTO system_settings (key, value) VALUES
-  ('platform_name', 'PlayFit LMS'),
+  ('platform_name', 'Playfit'),
   ('default_currency', 'INR'),
   ('max_file_upload_size_mb', '50'),
   ('allow_self_registration', 'true');

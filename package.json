@@ -10,6 +10,7 @@
     "migrate:check": "node src/scripts/checkMigrations.js",
     "migrate:verify": "node src/scripts/verifyDatabase.js",
     "create:admin": "node src/scripts/createAdmin.js",
+    "test:email": "node scripts/test_email.js",
     "lint": "eslint ."
   },
   "dependencies": {

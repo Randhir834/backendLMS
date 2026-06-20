@@ -64,8 +64,14 @@ const uploadToSupabase = async (file, folder = 'general') => {
   }
 };
 
-const deleteFromSupabase = async (filePath) => {
+const deleteFromSupabase = async (fileUrl) => {
   try {
+    // Extract path from URL if it's a full URL
+    let filePath = fileUrl;
+    if (fileUrl.includes('/uploads/')) {
+      filePath = fileUrl.split('/uploads/')[1];
+    }
+    
     const fullPath = path.join(uploadsDir, filePath);
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath);
