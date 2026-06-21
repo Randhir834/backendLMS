@@ -3,6 +3,14 @@ const jwt = require('jsonwebtoken');
 const { findUserByEmail, findUserByEmailOrPhone, createUser, updateUserPassword } = require('../services/userService');
 const { createResetToken, findUserIdByValidToken, deleteTokensForUser } = require('../services/passwordResetService');
 const { sendEmail } = require('../services/emailService');
+const { 
+  createSession, 
+  getUserSessions, 
+  revokeSession, 
+  revokeAllOtherSessions, 
+  revokeAllSessions,
+  getActiveSessionCount 
+} = require('../services/sessionService');
 
 const ALLOWED_ROLES = ['student', 'instructor', 'admin'];
 
@@ -51,6 +59,9 @@ const register = async (req, res, next) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
+    // Create session for multi-device tracking
+    const session = await createSession(user.id, token, req);
+
     res.status(201).json({
       message: 'User registered successfully',
       user: {
@@ -60,6 +71,11 @@ const register = async (req, res, next) => {
         qualifications: user.qualifications, specialization: user.specialization
       },
       token,
+      sessionToken: session.sessionToken,
+      sessionInfo: {
+        deviceInfo: session.deviceInfo,
+        expiresAt: session.expiresAt
+      }
     });
   } catch (error) {
     next(error);
@@ -107,10 +123,22 @@ const login = async (req, res, next) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
+    // Create session for multi-device tracking
+    const session = await createSession(user.id, token, req);
+    
+    // Get active session count
+    const activeSessionCount = await getActiveSessionCount(user.id);
+
     res.json({
       message: 'Login successful',
       user: { id: user.id, name: user.name, email: user.email, role: user.role, password_changed: true },
       token,
+      sessionToken: session.sessionToken,
+      sessionInfo: {
+        deviceInfo: session.deviceInfo,
+        expiresAt: session.expiresAt,
+        activeDevices: activeSessionCount
+      }
     });
   } catch (error) {
     next(error);
@@ -253,6 +281,9 @@ const resetPassword = async (req, res, next) => {
     const hashedPassword = await bcrypt.hash(password, 12);
     await updateUserPassword(userId, hashedPassword);
     await deleteTokensForUser(userId);
+    
+    // Revoke all sessions when password is changed for security
+    await revokeAllSessions(userId);
 
     res.json({ message: 'Password updated successfully. You can sign in with your new password.' });
   } catch (error) {
@@ -260,4 +291,128 @@ const resetPassword = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, refreshToken, forgotPassword, resetPassword };
+/**
+ * Get all active sessions for the current user
+ */
+const getSessions = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const sessions = await getUserSessions(userId);
+    
+    res.json({
+      message: 'Sessions retrieved successfully',
+      sessions,
+      totalActive: sessions.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Logout from current device
+ */
+const logout = async (req, res, next) => {
+  try {
+    const sessionToken = req.headers['x-session-token'];
+    
+    if (!sessionToken) {
+      return res.status(400).json({ error: 'Session token is required' });
+    }
+    
+    const userId = req.user.id;
+    
+    // Find and revoke the session
+    const sessions = await getUserSessions(userId);
+    const currentSession = sessions.find(s => s.id === req.session?.id);
+    
+    if (currentSession) {
+      await revokeSession(currentSession.id, userId);
+    }
+    
+    res.json({
+      message: 'Logged out successfully from this device'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Logout from a specific device/session
+ */
+const logoutDevice = async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    const userId = req.user.id;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+    
+    const success = await revokeSession(parseInt(sessionId), userId);
+    
+    if (!success) {
+      return res.status(404).json({ error: 'Session not found or already revoked' });
+    }
+    
+    res.json({
+      message: 'Logged out from the selected device successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Logout from all other devices except current
+ */
+const logoutOtherDevices = async (req, res, next) => {
+  try {
+    const sessionToken = req.headers['x-session-token'];
+    
+    if (!sessionToken) {
+      return res.status(400).json({ error: 'Session token is required' });
+    }
+    
+    const userId = req.user.id;
+    const revokedCount = await revokeAllOtherSessions(userId, sessionToken);
+    
+    res.json({
+      message: `Logged out from ${revokedCount} other device(s) successfully`,
+      revokedCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Logout from all devices
+ */
+const logoutAllDevices = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const revokedCount = await revokeAllSessions(userId);
+    
+    res.json({
+      message: `Logged out from all ${revokedCount} device(s) successfully`,
+      revokedCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { 
+  register, 
+  login, 
+  refreshToken, 
+  forgotPassword, 
+  resetPassword,
+  getSessions,
+  logout,
+  logoutDevice,
+  logoutOtherDevices,
+  logoutAllDevices
+};
