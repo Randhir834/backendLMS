@@ -81,13 +81,6 @@ const controllerUpdates = {
       { action: 'complete', event: 'LESSON_COMPLETED' }
     ]
   },
-  'attendanceController.js': {
-    import: "const { EVENTS, emitToAll, notifyDashboardUpdate } = require('../services/realtimeService');",
-    events: [
-      { action: 'mark', event: 'ATTENDANCE_MARKED' },
-      { action: 'update', event: 'ATTENDANCE_UPDATED' }
-    ]
-  },
   'paymentController.js': {
     import: "const { EVENTS, emitToAll, emitToUser, notifyDashboardUpdate } = require('../services/realtimeService');",
     events: [
@@ -134,7 +127,6 @@ console.log('   - userController.js (create, update, delete operations)');
 console.log('   - notificationController.js (create, markAsRead, delete operations)');
 console.log('   - liveClassController.js (create, update, delete, start, end operations)');
 console.log('   - progressController.js (update progress, complete lesson operations)');
-console.log('   - attendanceController.js (mark, update operations)');
 console.log('   - paymentController.js (create, update operations)');
 console.log('   - certificateController.js (generate operation)');
 console.log('   - categoryController.js (create, update, delete operations)');

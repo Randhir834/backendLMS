@@ -82,8 +82,8 @@ const uploadCourseMaterial = async (file, courseId, uploadedBy, materialData) =>
     const materialResult = await query(`
       INSERT INTO course_materials (
         course_id, title, description, file_type, file_name, 
-        file_path, file_size, mime_type, upload_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        file_path, file_size, mime_type, upload_by, folder_path
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `, [
       courseId,
@@ -94,7 +94,8 @@ const uploadCourseMaterial = async (file, courseId, uploadedBy, materialData) =>
       uploadData.path,
       file.size,
       file.mimetype,
-      uploadedBy
+      uploadedBy,
+      materialData.folder_path || null
     ]);
 
     return materialResult.rows[0];

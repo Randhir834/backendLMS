@@ -1,7 +1,7 @@
 const {
   findAllUsers, findUserById, updateUserRole, updateUser, deleteUserById,
   getDashboardStats, getEnrollmentTrend, getRecentEnrollments, getRecentPayments,
-  createInstructor
+  createInstructor, getStudentDetailedStats, getAllStudentsWithStats
 } = require('../services/adminService');
 
 const {
@@ -253,6 +253,34 @@ const createInstructorAccount = async (req, res, next) => {
   }
 };
 
+// Get detailed statistics for a specific student
+const getStudentStats = async (req, res, next) => {
+  try {
+    const studentId = parseInt(req.params.id);
+    if (isNaN(studentId)) {
+      return res.status(400).json({ error: 'Invalid student ID' });
+    }
+
+    const data = await getStudentDetailedStats(studentId);
+    res.json(data);
+  } catch (error) {
+    if (error.message === 'Student not found') {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+    next(error);
+  }
+};
+
+// Get all students with aggregated statistics
+const getStudentsWithStats = async (req, res, next) => {
+  try {
+    const students = await getAllStudentsWithStats();
+    res.json({ students });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = { 
   getUsers, 
   getUserById, 
@@ -263,5 +291,7 @@ module.exports = {
   archiveUser,
   deleteMultipleUsers,
   getAnalytics, 
-  createInstructorAccount 
+  createInstructorAccount,
+  getStudentStats,
+  getStudentsWithStats
 };

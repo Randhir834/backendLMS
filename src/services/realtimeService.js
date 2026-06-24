@@ -34,20 +34,6 @@ const EVENTS = {
   ENROLLMENT_UPDATED: 'enrollment:updated',
   ENROLLMENT_DELETED: 'enrollment:deleted',
 
-  // Assignment events
-  ASSIGNMENT_CREATED: 'assignment:created',
-  ASSIGNMENT_UPDATED: 'assignment:updated',
-  ASSIGNMENT_DELETED: 'assignment:deleted',
-  ASSIGNMENT_SUBMITTED: 'assignment:submitted',
-  ASSIGNMENT_GRADED: 'assignment:graded',
-
-  // Quiz events
-  QUIZ_CREATED: 'quiz:created',
-  QUIZ_UPDATED: 'quiz:updated',
-  QUIZ_DELETED: 'quiz:deleted',
-  QUIZ_SUBMITTED: 'quiz:submitted',
-  QUIZ_GRADED: 'quiz:graded',
-
   // Live class events
   LIVE_CLASS_CREATED: 'live_class:created',
   LIVE_CLASS_UPDATED: 'live_class:updated',
@@ -63,10 +49,6 @@ const EVENTS = {
   // Progress events
   PROGRESS_UPDATED: 'progress:updated',
   LESSON_COMPLETED: 'lesson:completed',
-
-  // Attendance events
-  ATTENDANCE_MARKED: 'attendance:marked',
-  ATTENDANCE_UPDATED: 'attendance:updated',
 
   // Payment events
   PAYMENT_CREATED: 'payment:created',

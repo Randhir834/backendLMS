@@ -6,6 +6,8 @@ const {
   findAllEnrollments,
   findCourseEnrollments,
   getCourseEnrollmentStats,
+  findStudentsByInstructor,
+  getInstructorStudentStats,
 } = require('../services/enrollmentService');
 const { createPaymentRecord } = require('../services/paymentService');
 const { findCourseById } = require('../services/courseService');
@@ -137,6 +139,44 @@ const getCourseEnrollmentsController = async (req, res, next) => {
   }
 };
 
+// Get all students enrolled in instructor's courses
+const getInstructorStudentsController = async (req, res, next) => {
+  try {
+    const instructorId = req.user.id;
+    const userRole = req.user.role;
+    
+    // Only instructors can access this endpoint
+    if (userRole !== 'instructor') {
+      return res.status(403).json({ 
+        error: 'Access denied. Only instructors can view their students.' 
+      });
+    }
+    
+    const filters = {};
+    
+    if (req.query.search) filters.search = req.query.search;
+    if (req.query.sort_by) filters.sort_by = req.query.sort_by;
+    if (req.query.sort_order) filters.sort_order = req.query.sort_order;
+    if (req.query.course_id) filters.course_filter = req.query.course_id;
+
+    console.log('[getInstructorStudents] Fetching students for instructor:', instructorId, 'with filters:', filters);
+
+    const students = await findStudentsByInstructor(instructorId, filters);
+    const stats = await getInstructorStudentStats(instructorId);
+    
+    console.log('[getInstructorStudents] Found', students.length, 'students');
+    
+    res.json({ 
+      students,
+      stats,
+      total: students.length
+    });
+  } catch (error) {
+    console.error('[getInstructorStudents] Error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   enrollCourse,
   getEnrollments,
@@ -144,4 +184,8 @@ module.exports = {
   checkEnrollment,
   getAllEnrollments,
   getCourseEnrollmentsController,
+  getInstructorStudentsController,
 };
+
+// Note: Slot-related controller methods have been removed.
+// See lessonCompletionController.js for the new lesson completion endpoints.

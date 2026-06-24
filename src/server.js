@@ -10,6 +10,7 @@ const cors = require('cors');
 const path = require('path');
 const { corsOptions } = require('./config/cors');
 const { errorHandler } = require('./middleware/errorHandler');
+const { errorTranslator } = require('./middleware/errorTranslator');
 const { requestLogger } = require('./middleware/requestLogger');
 const { authenticate } = require('./middleware/auth');
 const { pool } = require('./config/database');
@@ -88,9 +89,13 @@ app.get('/health', (req, res) => {
 });
 
 app.use((req, res) => {
-  res.status(404).json({ error: 'Not found' });
+  res.status(404).json({ error: 'The page you are looking for does not exist.' });
 });
 
+// Error translation middleware (converts technical errors to user-friendly messages)
+app.use(errorTranslator);
+
+// Error handler (sends the response)
 app.use(errorHandler);
 
 const PORT = Number(process.env.PORT || 5001);

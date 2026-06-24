@@ -248,8 +248,190 @@ const createInstructor = async (instructorData) => {
   };
 };
 
+// Get comprehensive student statistics including live classes and lesson progress
+const getStudentDetailedStats = async (studentId) => {
+  // Get basic student info
+  const studentResult = await query(
+    `SELECT id, name, email, phone, role, avatar_url, date_of_birth, school, grade, 
+            parent_guardian_name, location, created_at
+     FROM users 
+     WHERE id = $1 AND role = 'student'`,
+    [studentId]
+  );
+
+  if (studentResult.rows.length === 0) {
+    throw new Error('Student not found');
+  }
+
+  const student = studentResult.rows[0];
+  student.age = calculateAge(student.date_of_birth);
+  if (student.date_of_birth) {
+    student.date_of_birth = student.date_of_birth.toISOString().split('T')[0];
+  }
+
+  // Get all enrollments with course details
+  const enrollmentsResult = await query(
+    `SELECT 
+      e.id as enrollment_id,
+      e.course_id,
+      e.status as enrollment_status,
+      e.enrolled_at,
+      e.completed_at,
+      e.manual_completed_lessons,
+      c.title as course_title,
+      c.description as course_description,
+      c.thumbnail_url,
+      c.total_lessons,
+      c.price,
+      c.level,
+      c.duration_value,
+      c.duration_unit
+     FROM enrollments e
+     JOIN courses c ON e.course_id = c.id
+     WHERE e.user_id = $1
+     ORDER BY e.enrolled_at DESC`,
+    [studentId]
+  );
+
+  // For each enrollment, get live classes and lesson progress
+  const enrollments = await Promise.all(enrollmentsResult.rows.map(async (enrollment) => {
+    // Get live classes scheduled for this course
+    const liveClassesResult = await query(
+      `SELECT 
+        lc.id,
+        lc.title,
+        lc.description,
+        lc.meet_link,
+        lc.scheduled_at,
+        lc.duration_minutes,
+        lc.status,
+        lc.created_at,
+        u.name as created_by_name
+       FROM live_classes lc
+       LEFT JOIN users u ON lc.created_by = u.id
+       WHERE lc.course_id = $1
+       ORDER BY lc.scheduled_at DESC`,
+      [enrollment.course_id]
+    );
+
+    // Get lesson progress count (from lesson_progress table)
+    const lessonProgressResult = await query(
+      `SELECT COUNT(*) as completed_count
+       FROM lesson_progress lp
+       JOIN lessons l ON lp.lesson_id = l.id
+       JOIN sections s ON l.section_id = s.id
+       WHERE s.course_id = $1 AND lp.student_id = $2 AND lp.status = 'completed'`,
+      [enrollment.course_id, studentId]
+    );
+
+    // Calculate progress percentage
+    const completedFromDB = parseInt(lessonProgressResult.rows[0]?.completed_count || 0);
+    const completedFromManual = enrollment.manual_completed_lessons || 0;
+    const totalCompleted = Math.max(completedFromDB, completedFromManual);
+    const totalLessons = enrollment.total_lessons || 0;
+    const progressPercentage = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+
+    return {
+      ...enrollment,
+      live_classes: liveClassesResult.rows,
+      total_live_classes: liveClassesResult.rows.length,
+      completed_lessons: totalCompleted,
+      total_lessons: totalLessons,
+      progress_percentage: progressPercentage
+    };
+  }));
+
+  // Calculate overall statistics
+  const totalEnrollments = enrollments.length;
+  const totalLiveClasses = enrollments.reduce((sum, e) => sum + e.total_live_classes, 0);
+  const totalCompletedLessons = enrollments.reduce((sum, e) => sum + e.completed_lessons, 0);
+  const totalLessons = enrollments.reduce((sum, e) => sum + e.total_lessons, 0);
+  const overallProgress = totalLessons > 0 ? Math.round((totalCompletedLessons / totalLessons) * 100) : 0;
+
+  return {
+    student,
+    enrollments,
+    statistics: {
+      total_enrollments: totalEnrollments,
+      total_live_classes_scheduled: totalLiveClasses,
+      total_lessons_completed: totalCompletedLessons,
+      total_lessons: totalLessons,
+      overall_progress_percentage: overallProgress
+    }
+  };
+};
+
+// Get all students with their aggregated statistics
+const getAllStudentsWithStats = async () => {
+  const studentsResult = await query(
+    `SELECT id, name, email, phone, avatar_url, date_of_birth, school, grade, created_at
+     FROM users 
+     WHERE role = 'student'
+     ORDER BY created_at DESC`
+  );
+
+  const students = await Promise.all(studentsResult.rows.map(async (student) => {
+    // Get enrollment count
+    const enrollmentResult = await query(
+      'SELECT COUNT(*) as count FROM enrollments WHERE user_id = $1',
+      [student.id]
+    );
+
+    // Get total live classes across all courses
+    const liveClassResult = await query(
+      `SELECT COUNT(DISTINCT lc.id) as count
+       FROM live_classes lc
+       JOIN enrollments e ON lc.course_id = e.course_id
+       WHERE e.user_id = $1`,
+      [student.id]
+    );
+
+    // Get total completed lessons
+    const progressResult = await query(
+      `SELECT 
+        COALESCE(SUM(e.manual_completed_lessons), 0) as manual_completed,
+        COUNT(DISTINCT lp.id) FILTER (WHERE lp.status = 'completed') as db_completed
+       FROM enrollments e
+       LEFT JOIN courses c ON e.course_id = c.id
+       LEFT JOIN sections s ON s.course_id = c.id
+       LEFT JOIN lessons l ON l.section_id = s.id
+       LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.student_id = e.user_id
+       WHERE e.user_id = $1`,
+      [student.id]
+    );
+
+    // Get total lessons
+    const totalLessonsResult = await query(
+      `SELECT COALESCE(SUM(c.total_lessons), 0) as total
+       FROM enrollments e
+       JOIN courses c ON e.course_id = c.id
+       WHERE e.user_id = $1`,
+      [student.id]
+    );
+
+    const manualCompleted = parseInt(progressResult.rows[0]?.manual_completed || 0);
+    const dbCompleted = parseInt(progressResult.rows[0]?.db_completed || 0);
+    const totalCompleted = Math.max(manualCompleted, dbCompleted);
+    const totalLessons = parseInt(totalLessonsResult.rows[0]?.total || 0);
+    const progressPercentage = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+
+    return {
+      ...student,
+      age: calculateAge(student.date_of_birth),
+      date_of_birth: student.date_of_birth ? student.date_of_birth.toISOString().split('T')[0] : null,
+      total_enrollments: parseInt(enrollmentResult.rows[0].count),
+      total_live_classes: parseInt(liveClassResult.rows[0].count),
+      lessons_completed: totalCompleted,
+      total_lessons: totalLessons,
+      progress_percentage: progressPercentage
+    };
+  }));
+
+  return students;
+};
+
 module.exports = {
   findAllUsers, findUserById, updateUserRole, updateUser, deleteUserById,
   getDashboardStats, getEnrollmentTrend, getRecentEnrollments, getRecentPayments,
-  createInstructor
+  createInstructor, getStudentDetailedStats, getAllStudentsWithStats
 };

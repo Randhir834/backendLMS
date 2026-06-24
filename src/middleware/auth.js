@@ -5,7 +5,12 @@ const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
+    console.error('[Auth] Missing or invalid authorization header:', { 
+      path: req.path, 
+      method: req.method,
+      hasAuthHeader: !!authHeader 
+    });
+    return res.status(401).json({ error: 'Your session has expired. Please log in again.' });
   }
 
   const token = authHeader.split(' ')[1];
@@ -21,9 +26,13 @@ const authenticate = async (req, res, next) => {
       const session = await validateSession(sessionToken);
       
       if (!session || session.user_id !== decoded.id) {
+        console.error('[Auth] Invalid or expired session:', { 
+          userId: decoded.id, 
+          sessionExists: !!session,
+          sessionUserId: session?.user_id 
+        });
         return res.status(401).json({ 
-          error: 'Session expired or invalid. Please login again.',
-          code: 'SESSION_INVALID'
+          error: 'Your session has expired. Please log in again.'
         });
       }
       
@@ -36,15 +45,18 @@ const authenticate = async (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
+    console.error('[Auth] Token verification failed:', { 
+      errorName: error.name, 
+      errorMessage: error.message,
+      path: req.path
+    });
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ 
-        error: 'Token expired. Please login again.',
-        code: 'TOKEN_EXPIRED'
+        error: 'Your session has expired. Please log in again.'
       });
     }
     return res.status(401).json({ 
-      error: 'Invalid token.',
-      code: 'TOKEN_INVALID'
+      error: 'Your session has expired. Please log in again.'
     });
   }
 };

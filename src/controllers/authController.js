@@ -44,7 +44,7 @@ const register = async (req, res, next) => {
 
     const existingUser = await findUserByEmail(email);
     if (existingUser) {
-      return res.status(409).json({ error: 'Email already registered' });
+      return res.status(409).json({ error: 'An account with this email address already exists.' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -93,7 +93,7 @@ const login = async (req, res, next) => {
     let loginIdentifier = email || phone || identifier;
 
     if (!loginIdentifier || !password) {
-      return res.status(400).json({ error: 'Email/Phone and password are required.' });
+      return res.status(400).json({ error: 'Please enter your email address and password.' });
     }
 
     if (expectedRole && !ALLOWED_ROLES.includes(expectedRole)) {
@@ -102,12 +102,12 @@ const login = async (req, res, next) => {
 
     const user = await findUserByEmailOrPhone(loginIdentifier);
     if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return res.status(401).json({ error: 'The email address or password you entered is incorrect.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return res.status(401).json({ error: 'The email address or password you entered is incorrect.' });
     }
 
     // Check role match with case-insensitive comparison and better error messaging
@@ -149,7 +149,7 @@ const refreshToken = async (req, res, next) => {
   try {
     const { token: oldToken } = req.body;
     if (!oldToken) {
-      return res.status(401).json({ error: 'Token is required' });
+      return res.status(401).json({ error: 'Your session has expired. Please log in again.' });
     }
 
     const decoded = jwt.verify(oldToken, process.env.JWT_SECRET);
@@ -176,7 +176,7 @@ const forgotPassword = async (req, res, next) => {
     let resetIdentifier = email || phone || identifier;
 
     if (!resetIdentifier) {
-      return res.status(400).json({ error: 'Email or phone number is required.' });
+      return res.status(400).json({ error: 'Please enter your email address.' });
     }
 
     if (expectedRole && !ALLOWED_ROLES.includes(expectedRole)) {
@@ -266,16 +266,16 @@ const resetPassword = async (req, res, next) => {
     const { token, password } = req.body;
 
     if (!token || !password) {
-      return res.status(400).json({ error: 'Token and new password are required.' });
+      return res.status(400).json({ error: 'Please enter your new password.' });
     }
 
     if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
     }
 
     const userId = await findUserIdByValidToken(token);
     if (!userId) {
-      return res.status(400).json({ error: 'Invalid or expired reset link. Request a new reset from the login page.' });
+      return res.status(400).json({ error: 'This password reset link has expired or is invalid. Please request a new one.' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -317,7 +317,7 @@ const logout = async (req, res, next) => {
     const sessionToken = req.headers['x-session-token'];
     
     if (!sessionToken) {
-      return res.status(400).json({ error: 'Session token is required' });
+      return res.status(400).json({ error: 'Unable to log out. Please try again.' });
     }
     
     const userId = req.user.id;
@@ -347,13 +347,13 @@ const logoutDevice = async (req, res, next) => {
     const userId = req.user.id;
     
     if (!sessionId) {
-      return res.status(400).json({ error: 'Session ID is required' });
+      return res.status(400).json({ error: 'Unable to log out from this device. Please try again.' });
     }
     
     const success = await revokeSession(parseInt(sessionId), userId);
     
     if (!success) {
-      return res.status(404).json({ error: 'Session not found or already revoked' });
+      return res.status(404).json({ error: 'Session not found. It may have already been logged out.' });
     }
     
     res.json({
@@ -372,7 +372,7 @@ const logoutOtherDevices = async (req, res, next) => {
     const sessionToken = req.headers['x-session-token'];
     
     if (!sessionToken) {
-      return res.status(400).json({ error: 'Session token is required' });
+      return res.status(400).json({ error: 'Unable to log out from other devices. Please try again.' });
     }
     
     const userId = req.user.id;

@@ -10,8 +10,6 @@ const searchAll = async (searchTerm, userRole = null, userId = null, searchConte
     return {
       courses: [],
       lessons: [],
-      assignments: [],
-      quizzes: [],
       liveClasses: [],
       users: [],
       categories: [],
@@ -166,90 +164,6 @@ const searchAll = async (searchTerm, userRole = null, userId = null, searchConte
   };
   
   searchPromises.push(searchLessons());
-
-  // Search Assignments
-  const searchAssignments = async () => {
-    try {
-      let assignmentSql = `
-        SELECT a.id, a.title, a.description, a.course_id, a.due_date, a.max_score, a.created_at,
-          c.title AS course_title, c.status AS course_status,
-          'assignment' AS result_type,
-          CASE 
-            WHEN CAST($2 AS INTEGER) IS NOT NULL AND a.id = CAST($2 AS INTEGER) THEN 0
-            WHEN $3 = 'assignment' THEN 1
-            WHEN CAST($2 AS INTEGER) IS NOT NULL AND a.course_id = CAST($2 AS INTEGER) THEN 2
-            WHEN $3 = 'course' THEN 3
-            WHEN LOWER(a.title) LIKE $1 THEN 4
-            ELSE 5
-          END AS priority
-        FROM assignments a
-        JOIN courses c ON a.course_id = c.id
-        WHERE (
-          LOWER(a.title) LIKE $1 
-          OR LOWER(COALESCE(a.description, '')) LIKE $1
-          OR CAST(a.id AS TEXT) LIKE $1
-        )
-      `;
-      
-      const params = [term, contextId?.toString() || null, contextType || null];
-      
-      if (userRole === 'student') {
-        assignmentSql += " AND c.status = 'published'";
-      }
-      
-      assignmentSql += ' ORDER BY priority, a.created_at DESC LIMIT 20';
-      
-      const result = await query(assignmentSql, params);
-      return result.rows;
-    } catch (err) {
-      console.error('Error searching assignments:', err);
-      return [];
-    }
-  };
-  
-  searchPromises.push(searchAssignments());
-
-  // Search Quizzes
-  const searchQuizzes = async () => {
-    try {
-      let quizSql = `
-        SELECT q.id, q.title, q.description, q.course_id, q.time_limit_minutes, q.passing_score, q.created_at,
-          c.title AS course_title, c.status AS course_status,
-          'quiz' AS result_type,
-          CASE 
-            WHEN CAST($2 AS INTEGER) IS NOT NULL AND q.id = CAST($2 AS INTEGER) THEN 0
-            WHEN $3 = 'quiz' THEN 1
-            WHEN CAST($2 AS INTEGER) IS NOT NULL AND q.course_id = CAST($2 AS INTEGER) THEN 2
-            WHEN $3 = 'course' THEN 3
-            WHEN LOWER(q.title) LIKE $1 THEN 4
-            ELSE 5
-          END AS priority
-        FROM quizzes q
-        JOIN courses c ON q.course_id = c.id
-        WHERE (
-          LOWER(q.title) LIKE $1 
-          OR LOWER(COALESCE(q.description, '')) LIKE $1
-          OR CAST(q.id AS TEXT) LIKE $1
-        )
-      `;
-      
-      const params = [term, contextId?.toString() || null, contextType || null];
-      
-      if (userRole === 'student') {
-        quizSql += " AND c.status = 'published'";
-      }
-      
-      quizSql += ' ORDER BY priority, q.created_at DESC LIMIT 20';
-      
-      const result = await query(quizSql, params);
-      return result.rows;
-    } catch (err) {
-      console.error('Error searching quizzes:', err);
-      return [];
-    }
-  };
-  
-  searchPromises.push(searchQuizzes());
 
   // Search Live Classes
   const searchLiveClasses = async () => {
@@ -464,8 +378,6 @@ const searchAll = async (searchTerm, userRole = null, userId = null, searchConte
     courses,
     sections,
     lessons,
-    assignments,
-    quizzes,
     liveClasses,
     users,
     categories,
@@ -476,8 +388,6 @@ const searchAll = async (searchTerm, userRole = null, userId = null, searchConte
     courses,
     sections,
     lessons,
-    assignments,
-    quizzes,
     liveClasses,
     users,
     categories,

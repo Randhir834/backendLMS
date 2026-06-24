@@ -33,7 +33,7 @@ const upload = multer({
  */
 const uploadMaterial = catchAsync(async (req, res) => {
   const { courseId } = req.params;
-  const { title, description } = req.body;
+  const { title, description, folder_path } = req.body;
   
   if (!req.file) {
     throw new AppError('No file uploaded', 400);
@@ -48,7 +48,7 @@ const uploadMaterial = catchAsync(async (req, res) => {
     req.file,
     courseId,
     req.user.id,
-    { title, description }
+    { title, description, folder_path }
   );
 
   // Log the upload

@@ -173,34 +173,6 @@ const broadcastPaymentUpdate = (paymentId, paymentData, action = 'update') => {
   });
 };
 
-const broadcastAssignmentUpdate = (assignmentId, assignmentData, action = 'update') => {
-  if (!global.io) return;
-
-  global.io.to('admin-room').emit('admin-data-updated', {
-    type: 'ASSIGNMENT_UPDATED',
-    data: {
-      assignmentId,
-      assignment: assignmentData,
-      action
-    },
-    timestamp: new Date().toISOString()
-  });
-};
-
-const broadcastQuizUpdate = (quizId, quizData, action = 'update') => {
-  if (!global.io) return;
-
-  global.io.to('admin-room').emit('admin-data-updated', {
-    type: 'QUIZ_UPDATED',
-    data: {
-      quizId,
-      quiz: quizData,
-      action
-    },
-    timestamp: new Date().toISOString()
-  });
-};
-
 const broadcastAnalyticsUpdate = (analyticsData) => {
   if (!global.io) return;
 
@@ -221,7 +193,5 @@ module.exports = {
   broadcastLiveClassUpdate,
   broadcastEnrollmentUpdate,
   broadcastPaymentUpdate,
-  broadcastAssignmentUpdate,
-  broadcastQuizUpdate,
   broadcastAnalyticsUpdate
 };

@@ -77,7 +77,7 @@ const createCourse = async (req, res, next) => {
     const {
       title, description, price, thumbnail_url, category_id, status,
       duration_value, duration_unit, level, language, what_you_learn, requirements,
-      instructor_ids
+      total_lessons, instructor_ids
     } = req.body;
 
     if (!title || !description) {
@@ -104,6 +104,7 @@ const createCourse = async (req, res, next) => {
       language, 
       what_you_learn, 
       requirements,
+      total_lessons,
       instructor_ids
     });
 

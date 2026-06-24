@@ -15,8 +15,6 @@ const globalSearch = catchAsync(async (req, res) => {
         courses: [],
         lessons: [],
         sections: [],
-        assignments: [],
-        quizzes: [],
         liveClasses: [],
         users: [],
         categories: [],

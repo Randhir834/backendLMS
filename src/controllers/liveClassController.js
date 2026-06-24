@@ -14,6 +14,12 @@ const { notifyStudentsAboutLiveClass } = require('../services/notificationServic
 
 const getLiveClasses = async (req, res, next) => {
   try {
+    // Validate user object
+    if (!req.user || !req.user.id || !req.user.role) {
+      console.error('[getLiveClasses] Missing or invalid req.user:', req.user);
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
     // If course_id is provided, get classes for that course
     if (req.query.course_id) {
       const classes = await findLiveClassesByCourse(req.query.course_id);
@@ -53,6 +59,7 @@ const getLiveClasses = async (req, res, next) => {
 
     return res.json({ liveClasses: [] });
   } catch (error) {
+    console.error('[getLiveClasses] Error:', error.message, error.stack);
     next(error);
   }
 };
@@ -73,13 +80,13 @@ const createLiveClassController = async (req, res, next) => {
   try {
     const { course_id, lesson_id, section_id, title, description, meet_link, scheduled_at, duration_minutes } = req.body;
 
-    // Validate required fields
-    if (!course_id || !title || !meet_link || !scheduled_at) {
-      return res.status(400).json({ error: 'course_id, title, meet_link, and scheduled_at are required' });
+    // Validate required fields (meet_link is now optional - will use course default if not provided)
+    if (!course_id || !title || !scheduled_at) {
+      return res.status(400).json({ error: 'course_id, title, and scheduled_at are required' });
     }
 
-    // Validate Google Meet link format
-    if (!meet_link.includes('meet.google.com')) {
+    // Validate Google Meet link format if provided
+    if (meet_link && !meet_link.includes('meet.google.com')) {
       return res.status(400).json({ error: 'Invalid Google Meet link' });
     }
 
@@ -95,11 +102,18 @@ const createLiveClassController = async (req, res, next) => {
       section_id: section_id || null,
       title,
       description: description || '',
-      meet_link,
+      meet_link: meet_link || null, // Will be populated from course if null
       scheduled_at,
       duration_minutes: duration_minutes || 60,
       created_by: req.user.id,
     });
+
+    // Check if meet_link was successfully populated
+    if (!liveClass.meet_link) {
+      return res.status(400).json({ 
+        error: 'No Google Meet link provided and no default link set for this course. Please provide a meet_link or set a default Google Meet link in the course settings.' 
+      });
+    }
 
     res.status(201).json({
       message: 'Live class scheduled successfully',
@@ -186,9 +200,14 @@ const deleteLiveClass = async (req, res, next) => {
   }
 };
 
-// Get courses with their live classes for instructors
 const getCoursesWithLiveClasses = async (req, res, next) => {
   try {
+    // Validate user object
+    if (!req.user || !req.user.id || !req.user.role) {
+      console.error('[getCoursesWithLiveClasses] Missing or invalid req.user:', req.user);
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
     if (req.user.role === 'instructor') {
       const courses = await findCoursesWithLiveClassesByInstructor(req.user.id);
       return res.json({ courses });
@@ -201,6 +220,7 @@ const getCoursesWithLiveClasses = async (req, res, next) => {
 
     return res.json({ courses: [] });
   } catch (error) {
+    console.error('[getCoursesWithLiveClasses] Error:', error.message, error.stack);
     next(error);
   }
 };
