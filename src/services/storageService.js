@@ -51,8 +51,9 @@ const uploadToSupabase = async (file, folder = 'general') => {
     // Save file locally
     fs.writeFileSync(filePath, file.buffer);
 
-    // Generate public URL (assuming uploads are served from /uploads)
-    const publicUrl = `${process.env.API_URL || 'http://localhost:5001'}/uploads/${fileName}`;
+    // Generate public URL using BACKEND_URL from environment
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
+    const publicUrl = `${backendUrl}/uploads/${fileName}`;
 
     return {
       path: fileName,
