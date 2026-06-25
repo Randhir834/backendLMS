@@ -30,7 +30,7 @@ const upload = multer({
   },
 });
 
-// Create uploads directory if it doesn't exist
+// Create uploads directory for local fallback
 const uploadsDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -39,19 +39,47 @@ if (!fs.existsSync(uploadsDir)) {
 const uploadToSupabase = async (file, folder = 'general') => {
   const ext = path.extname(file.originalname);
   const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}${ext}`;
-  const filePath = path.join(uploadsDir, fileName);
 
   try {
-    // Create folder if it doesn't exist
+    // Try Supabase Storage first
+    const supabase = getSupabaseClient();
+    const bucket = process.env.SUPABASE_BUCKET || 'playfit-storage';
+
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
+
+    if (error) {
+      console.error('Supabase upload error:', error);
+      throw error;
+    }
+
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(fileName);
+
+    return {
+      path: fileName,
+      publicUrl: publicUrlData.publicUrl,
+    };
+  } catch (err) {
+    console.error('Supabase upload failed, falling back to local storage:', err.message);
+    
+    // Fallback to local storage for development
+    const filePath = path.join(uploadsDir, fileName);
     const folderPath = path.dirname(filePath);
+    
     if (!fs.existsSync(folderPath)) {
       fs.mkdirSync(folderPath, { recursive: true });
     }
 
-    // Save file locally
     fs.writeFileSync(filePath, file.buffer);
 
-    // Generate public URL using BACKEND_URL from environment
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
     const publicUrl = `${backendUrl}/uploads/${fileName}`;
 
@@ -59,26 +87,54 @@ const uploadToSupabase = async (file, folder = 'general') => {
       path: fileName,
       publicUrl: publicUrl,
     };
-  } catch (err) {
-    console.error('Upload error details:', err);
-    throw new Error(`Upload failed: ${err.message}`);
   }
 };
 
 const deleteFromSupabase = async (fileUrl) => {
   try {
-    // Extract path from URL if it's a full URL
+    // Extract path from URL
     let filePath = fileUrl;
-    if (fileUrl.includes('/uploads/')) {
+    
+    // If it's a Supabase URL
+    if (fileUrl.includes('supabase.co/storage')) {
+      const urlParts = fileUrl.split('/object/public/');
+      if (urlParts.length > 1) {
+        const pathParts = urlParts[1].split('/');
+        pathParts.shift(); // Remove bucket name
+        filePath = pathParts.join('/');
+      }
+    } else if (fileUrl.includes('/uploads/')) {
+      // Local storage path
       filePath = fileUrl.split('/uploads/')[1];
     }
-    
-    const fullPath = path.join(uploadsDir, filePath);
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
+
+    // Try Supabase Storage first
+    const supabase = getSupabaseClient();
+    const bucket = process.env.SUPABASE_BUCKET || 'playfit-storage';
+
+    const { error } = await supabase.storage
+      .from(bucket)
+      .remove([filePath]);
+
+    if (error) {
+      console.error('Supabase delete error:', error);
+      // Try local fallback
+      const fullPath = path.join(uploadsDir, filePath);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
     }
   } catch (err) {
-    throw new Error(`Delete failed: ${err.message}`);
+    console.error('Delete failed:', err.message);
+    // Try local fallback
+    try {
+      const fullPath = path.join(uploadsDir, filePath);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    } catch (localErr) {
+      console.error('Local delete also failed:', localErr.message);
+    }
   }
 };
 
