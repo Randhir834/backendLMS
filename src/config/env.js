@@ -30,6 +30,8 @@ function validateEnv() {
   console.log(`  - JWT_SECRET: ${jwtSecret ? '✓ Set' : '✗ Missing'}`);
   console.log(`  - DATABASE_URL: ${hasDatabaseUrl ? '✓ Set' : '✗ Missing'}`);
   console.log(`  - NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`  - RAZORPAY_KEY_ID: ${process.env.RAZORPAY_KEY_ID ? '✓ Set' : '✗ Missing'}`);
+  console.log(`  - RAZORPAY_KEY_SECRET: ${process.env.RAZORPAY_KEY_SECRET ? '✓ Set' : '✗ Missing'}`);
 
   if (errors.length) {
     console.error('\n[env] ❌ CONFIGURATION ERRORS:');
