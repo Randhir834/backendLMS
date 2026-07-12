@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const contactController = require('../controllers/contactController');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
+const { authorizeRoles } = require('../middleware/roleMiddleware');
 
 // Public route - Submit contact form
 router.post('/submit', contactController.submitContactForm);
@@ -9,15 +10,15 @@ router.post('/submit', contactController.submitContactForm);
 // Admin routes - Manage contact requests
 router.get(
   '/requests',
-  authenticateToken,
-  requireRole(['admin']),
+  authenticate,
+  authorizeRoles('admin'),
   contactController.getAllContactRequests
 );
 
 router.patch(
   '/requests/:id/status',
-  authenticateToken,
-  requireRole(['admin']),
+  authenticate,
+  authorizeRoles('admin'),
   contactController.updateContactRequestStatus
 );
 
