@@ -25,6 +25,13 @@ function validateEnv() {
     errors.push('DATABASE_URL is required (PostgreSQL connection string)');
   }
 
+  // Check SMTP configuration (not required but important for password reset)
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  const emailFrom = process.env.EMAIL_FROM;
+  const smtpConfigured = smtpHost && smtpUser && smtpPass && emailFrom;
+
   // Log configuration status
   console.log('[env] Configuration Check:');
   console.log(`  - JWT_SECRET: ${jwtSecret ? '✓ Set' : '✗ Missing'}`);
@@ -32,6 +39,23 @@ function validateEnv() {
   console.log(`  - NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
   console.log(`  - RAZORPAY_KEY_ID: ${process.env.RAZORPAY_KEY_ID ? '✓ Set' : '✗ Missing'}`);
   console.log(`  - RAZORPAY_KEY_SECRET: ${process.env.RAZORPAY_KEY_SECRET ? '✓ Set' : '✗ Missing'}`);
+  console.log(`  - SMTP Configuration: ${smtpConfigured ? '✓ Complete' : '⚠️  Incomplete'}`);
+  
+  if (!smtpConfigured) {
+    console.warn('\n⚠️  [env] WARNING: SMTP credentials not fully configured!');
+    console.warn('   Email features (forgot password, notifications) will NOT work!');
+    console.warn('   Missing variables:');
+    if (!smtpHost) console.warn('   - SMTP_HOST');
+    if (!smtpUser) console.warn('   - SMTP_USER');
+    if (!smtpPass) console.warn('   - SMTP_PASS');
+    if (!emailFrom) console.warn('   - EMAIL_FROM');
+    console.warn('   Please set these in your environment variables.\n');
+  } else {
+    console.log(`    ✓ Host: ${smtpHost}`);
+    console.log(`    ✓ Port: ${process.env.SMTP_PORT || 587}`);
+    console.log(`    ✓ User: ${smtpUser}`);
+    console.log(`    ✓ From: ${emailFrom}`);
+  }
 
   if (errors.length) {
     console.error('\n[env] ❌ CONFIGURATION ERRORS:');
