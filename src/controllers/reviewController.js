@@ -42,6 +42,16 @@ exports.submitReview = async (req, res) => {
       [name, role, rating, message, email, phone, courseName, 'pending']
     );
 
+    // Emit Socket.IO event to notify admin of new review
+    if (global.io) {
+      global.io.to('admin-room').emit('new-review-submitted', {
+        reviewId: result.rows[0].id,
+        name,
+        rating,
+        message: 'A new review has been submitted and is awaiting approval'
+      });
+    }
+
     res.status(201).json({
       message: 'Review submitted successfully. It will be visible after admin approval.',
       id: result.rows[0].id
@@ -105,7 +115,7 @@ exports.getAllReviews = async (req, res) => {
     let query = `
       SELECT 
         r.*,
-        u.full_name as reviewed_by_name
+        u.name as reviewed_by_name
       FROM reviews r
       LEFT JOIN users u ON r.reviewed_by = u.id
       WHERE 1=1
@@ -201,7 +211,7 @@ exports.getReviewById = async (req, res) => {
     const result = await client.query(
       `SELECT 
         r.*,
-        u.full_name as reviewed_by_name
+        u.name as reviewed_by_name
        FROM reviews r
        LEFT JOIN users u ON r.reviewed_by = u.id
        WHERE r.id = $1`,
@@ -230,6 +240,16 @@ exports.approveReview = async (req, res) => {
     const { id } = req.params;
     const adminId = req.user.id; // From auth middleware
 
+    // Get review details before updating
+    const reviewResult = await client.query(
+      'SELECT * FROM reviews WHERE id = $1',
+      [id]
+    );
+
+    if (reviewResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Review not found' });
+    }
+
     await client.query(
       `UPDATE reviews 
        SET status = 'approved', 
@@ -239,6 +259,14 @@ exports.approveReview = async (req, res) => {
        WHERE id = $2`,
       [adminId, id]
     );
+
+    // Emit Socket.IO event for real-time update
+    if (global.io) {
+      global.io.emit('review-approved', {
+        reviewId: id,
+        message: 'A new review has been approved and is now visible'
+      });
+    }
 
     res.json({ message: 'Review approved successfully' });
   } catch (error) {

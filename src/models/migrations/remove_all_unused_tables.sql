@@ -57,18 +57,4 @@ DROP TABLE IF EXISTS lesson_progress CASCADE;
 DROP TABLE IF EXISTS lessons CASCADE;
 DROP TABLE IF EXISTS sections CASCADE;
 
--- Log the migration
-INSERT INTO migration_history (migration_name, executed_at)
-VALUES ('remove_all_unused_tables', NOW())
-ON CONFLICT (migration_name) DO NOTHING;
-
 COMMIT;
-
--- Verify remaining tables
-SELECT 
-  'Tables remaining: ' || COUNT(*) AS status
-FROM pg_tables 
-WHERE schemaname = 'public';
-
-SELECT 
-  '✅ Migration completed successfully - 12 unused tables removed' AS message;

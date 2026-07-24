@@ -1,2 +1,16 @@
 node_modules/
 .env
+uploads/
+*.log
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Test files (optional - uncomment if you don't want to push test scripts)
+# test_*.js
+# *_test.js
+# verify_*.js
+# quick_*.js
