@@ -20,7 +20,7 @@ const trialRequestRoutes = require('./trialRequestRoutes');
 const instructorRegistrationRoutes = require('./instructorRegistrationRoutes');
 const recommendationRoutes = require('./recommendationRoutes');
 const lessonCompletionRoutes = require('./lessonCompletionRoutes');
-const contactRoutes = require('./contactRoutes');
+const reviewRoutes = require('./reviewRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
@@ -39,7 +39,7 @@ router.use('/trial-requests', trialRequestRoutes);
 router.use('/instructor-registrations', instructorRegistrationRoutes);
 router.use('/recommendations', recommendationRoutes);
 router.use('/lessons', lessonCompletionRoutes);
-router.use('/contact', contactRoutes);
+router.use('/reviews', reviewRoutes);
 router.use('/', courseMaterialRoutes);
 
 router.use((req, res) => {

@@ -240,27 +240,15 @@ If you didn't request this password reset, you can safely ignore this email.
         text,
       });
 
-      // Log email send status for debugging
       if (!result.sent) {
-        console.error(`\n⚠️  [FORGOT PASSWORD] Failed to send email to ${user.email}`);
-        console.error(`   Reason: ${result.reason}`);
-        console.error(`   User ID: ${user.id}, Role: ${user.role}`);
-        
-        // In development or when SMTP not configured, show the reset link in console
-        if (result.reason === 'smtp_not_configured') {
-          console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-          console.log(`📧 PASSWORD RESET LINK (SMTP Not Configured - Development Mode)`);
-          console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-          console.log(`Email: ${user.email}`);
-          console.log(`Role: ${user.role}`);
-          console.log(`Link: ${link}`);
-          console.log(`Expires in: 10 minutes`);
-          console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
-        }
-      } else {
-        console.log(`✅ [FORGOT PASSWORD] Password reset email sent successfully to ${user.email}`);
-        console.log(`   User ID: ${user.id}, Role: ${user.role}`);
-        console.log(`   Token expires in: ${process.env.PASSWORD_RESET_EXPIRY_MINUTES || 10} minutes\n`);
+        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`📧 PASSWORD RESET LINK (Development Mode)`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`Email: ${user.email}`);
+        console.log(`Role: ${user.role}`);
+        console.log(`Link: ${link}`);
+        console.log(`Expires in: 10 minutes`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
       }
     }
 
