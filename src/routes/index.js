@@ -22,6 +22,7 @@ const recommendationRoutes = require('./recommendationRoutes');
 const lessonCompletionRoutes = require('./lessonCompletionRoutes');
 const reviewRoutes = require('./reviewRoutes');
 const contactRoutes = require('./contactRoutes');
+const blogRoutes = require('./blogRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
@@ -42,6 +43,7 @@ router.use('/recommendations', recommendationRoutes);
 router.use('/lessons', lessonCompletionRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/contact', contactRoutes);
+router.use('/blogs', blogRoutes);
 router.use('/', courseMaterialRoutes);
 
 router.use((req, res) => {
