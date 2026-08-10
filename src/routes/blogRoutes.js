@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const blogController = require('../controllers/blogController');
 const { authenticate } = require('../middleware/auth');
-const { isAdmin } = require('../middleware/roleMiddleware');
+const { authorizeRoles } = require('../middleware/roleMiddleware');
 
 // Public routes - No authentication required
 router.get('/published', blogController.getPublishedBlogs);
@@ -10,13 +10,11 @@ router.get('/recent', blogController.getRecentBlogs);
 router.get('/slug/:slug', blogController.getBlogBySlug);
 
 // Admin routes - Require admin authentication
-router.use(authenticate, isAdmin);
-
-router.get('/', blogController.getAllBlogs);
-router.get('/:id', blogController.getBlogById);
-router.post('/', blogController.createBlog);
-router.put('/:id', blogController.updateBlog);
-router.delete('/:id', blogController.deleteBlog);
-router.patch('/:id/toggle-publish', blogController.togglePublishStatus);
+router.get('/', authenticate, authorizeRoles('admin'), blogController.getAllBlogs);
+router.get('/:id', authenticate, authorizeRoles('admin'), blogController.getBlogById);
+router.post('/', authenticate, authorizeRoles('admin'), blogController.createBlog);
+router.put('/:id', authenticate, authorizeRoles('admin'), blogController.updateBlog);
+router.delete('/:id', authenticate, authorizeRoles('admin'), blogController.deleteBlog);
+router.patch('/:id/toggle-publish', authenticate, authorizeRoles('admin'), blogController.togglePublishStatus);
 
 module.exports = router;
