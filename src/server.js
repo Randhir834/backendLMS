@@ -68,12 +68,20 @@ app.use(requestLogger);
 
 // Serve uploaded files publicly (no authentication required for images)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
-  setHeaders: (res, path) => {
+  setHeaders: (res, filePath) => {
+    // Get file extension to determine content disposition
+    const ext = path.extname(filePath).toLowerCase();
+    
+    // For documents and presentations, set inline to open in browser
+    const inlineTypes = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.txt'];
+    const contentDisposition = inlineTypes.includes(ext) ? 'inline' : 'attachment';
+    
     // Set security headers for uploaded files
     res.set({
       'Cache-Control': 'public, max-age=3600',
       'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
+      'X-Frame-Options': 'SAMEORIGIN', // Allow iframe for document viewers
+      'Content-Disposition': contentDisposition,
     });
   }
 }));

@@ -226,10 +226,17 @@ const getSecureFileUrl = async (filePath, expiresIn = 1800) => {
   // Otherwise, it's a Supabase file - try to get signed URL
   const supabase = getSupabaseClient();
   
+  // Get file extension to determine if we should use inline disposition
+  const ext = path.extname(filePath).toLowerCase();
+  const inlineTypes = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.txt'];
+  const isInline = inlineTypes.includes(ext);
+  
   try {
     const { data, error } = await supabase.storage
       .from('course-materials-private')
-      .createSignedUrl(filePath, expiresIn);
+      .createSignedUrl(filePath, expiresIn, {
+        download: !isInline // Set download to false for inline types
+      });
 
     if (error) throw error;
     return data.signedUrl;
@@ -238,7 +245,9 @@ const getSecureFileUrl = async (filePath, expiresIn = 1800) => {
     try {
       const { data, error } = await supabase.storage
         .from(process.env.SUPABASE_BUCKET || 'playfit-storage')
-        .createSignedUrl(filePath, expiresIn);
+        .createSignedUrl(filePath, expiresIn, {
+          download: !isInline // Set download to false for inline types
+        });
 
       if (error) throw error;
       return data.signedUrl;

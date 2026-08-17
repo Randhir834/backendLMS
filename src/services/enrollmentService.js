@@ -121,13 +121,9 @@ const findCourseEnrollments = async (course_id, filters = {}) => {
       u.phone AS student_phone,
       u.date_of_birth,
       u.grade,
-      (SELECT COUNT(*) FROM lesson_progress lp 
-       JOIN lessons l ON lp.lesson_id = l.id 
-       JOIN sections s ON l.section_id = s.id
-       WHERE lp.student_id = e.user_id AND s.course_id = e.course_id AND lp.status = 'completed') AS completed_lessons,
-      (SELECT COUNT(*) FROM lessons l 
-       JOIN sections s ON l.section_id = s.id
-       WHERE s.course_id = e.course_id) AS total_lessons
+      (SELECT COUNT(*) FROM lesson_completions lc 
+       WHERE lc.enrollment_id = e.id) AS completed_lessons,
+      0 AS total_lessons
     FROM enrollments e
     JOIN users u ON e.user_id = u.id
     WHERE e.course_id = $1
