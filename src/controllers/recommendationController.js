@@ -1,7 +1,7 @@
 const pool = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
 
-// Questionnaire structure
+// Questionnaire structure - Redesigned for 7 available courses
 const getQuestionnaire = async (req, res, next) => {
   try {
     const questionnaire = {
@@ -9,106 +9,110 @@ const getQuestionnaire = async (req, res, next) => {
         {
           id: 'child_age',
           type: 'number',
-          question: "What is your child's age?",
+          question: "What is your child age?",
           required: true,
           min: 3,
           max: 18
         },
         {
-          id: 'interests',
-          type: 'multiple_choice',
-          question: "What are your child's primary interests? (Select all that apply)",
-          required: true,
-          options: [
-            { value: 'arts', label: 'Arts & Creativity' },
-            { value: 'music', label: 'Music & Performance' },
-            { value: 'strategy', label: 'Strategy & Games' },
-            { value: 'language', label: 'Language & Reading' },
-            { value: 'mathematics', label: 'Mathematics & Logic' },
-            { value: 'technology', label: 'Technology & Computers' },
-            { value: 'communication', label: 'Communication & Leadership' },
-            { value: 'puzzles', label: 'Puzzles & Problem Solving' }
-          ]
-        },
-        {
-          id: 'learning_style',
+          id: 'primary_interest',
           type: 'single_choice',
-          question: "How does your child learn best?",
+          question: "What is your child most interested in learning?",
           required: true,
           options: [
-            { value: 'visual', label: 'Visual - Through pictures, diagrams, and demonstrations' },
-            { value: 'hands-on', label: 'Hands-on - Through practice and physical activities' },
-            { value: 'auditory', label: 'Auditory - Through listening and discussions' },
-            { value: 'logical', label: 'Logical - Through reasoning and problem-solving' }
+            { value: 'reading_language', label: 'Reading & Language Skills - Building vocabulary, comprehension & reading fluency' },
+            { value: 'communication', label: 'Communication & Public Speaking - Expressing ideas confidently in front of others' },
+            { value: 'spelling_grammar', label: 'Spelling & Grammar - Writing correctly and understanding language rules' },
+            { value: 'technology', label: 'Technology & AI - Learning about artificial intelligence and digital creativity' }
           ]
         },
         {
-          id: 'personality',
+          id: 'current_reading_level',
+          type: 'single_choice',
+          question: "How would you describe your child current reading ability?",
+          required: true,
+          options: [
+            { value: 'beginner', label: 'Beginner - Just starting to read simple words' },
+            { value: 'developing', label: 'Developing - Can read simple sentences and short stories' },
+            { value: 'confident', label: 'Confident - Reads fluently and understands stories well' },
+            { value: 'advanced', label: 'Advanced - Reads chapter books independently' }
+          ]
+        },
+        {
+          id: 'learning_goals',
+          type: 'multiple_choice',
+          question: "What specific skills would you like your child to improve? (Select all that apply)",
+          required: true,
+          options: [
+            { value: 'phonics_pronunciation', label: 'Phonics & Pronunciation - Learning letter sounds and how to read words' },
+            { value: 'reading_fluency', label: 'Reading Fluency - Reading smoothly and with understanding' },
+            { value: 'vocabulary', label: 'Vocabulary - Learning new words and their meanings' },
+            { value: 'spelling', label: 'Spelling - Writing words correctly' },
+            { value: 'grammar', label: 'Grammar - Understanding sentence structure and language rules' },
+            { value: 'speaking_confidence', label: 'Speaking Confidence - Talking clearly in front of others' },
+            { value: 'comprehension', label: 'Comprehension - Understanding what they read' },
+            { value: 'digital_skills', label: 'Digital Skills - Using technology creatively and safely' }
+          ]
+        },
+        {
+          id: 'personality_traits',
           type: 'multiple_choice',
           question: "Which traits best describe your child? (Select up to 3)",
           required: true,
           max_selections: 3,
           options: [
-            { value: 'creative', label: 'Creative & Imaginative' },
-            { value: 'analytical', label: 'Analytical & Logical' },
-            { value: 'social', label: 'Social & Outgoing' },
-            { value: 'patient', label: 'Patient & Focused' },
-            { value: 'competitive', label: 'Competitive & Ambitious' },
-            { value: 'curious', label: 'Curious & Eager to Learn' },
-            { value: 'expressive', label: 'Expressive & Confident' },
-            { value: 'detail_oriented', label: 'Detail-Oriented & Careful' }
+            { value: 'shy_quiet', label: 'Shy & Quiet - Needs encouragement to speak up' },
+            { value: 'confident_expressive', label: 'Confident & Expressive - Loves to share ideas and perform' },
+            { value: 'curious_eager', label: 'Curious & Eager to Learn - Asks lots of questions' },
+            { value: 'creative_imaginative', label: 'Creative & Imaginative - Loves stories and creative thinking' },
+            { value: 'focused_detail', label: 'Focused & Detail-Oriented - Careful with rules and accuracy' },
+            { value: 'tech_savvy', label: 'Tech-Savvy - Interested in computers and technology' },
+            { value: 'competitive', label: 'Competitive - Enjoys challenges and competitions' },
+            { value: 'patient_persistent', label: 'Patient & Persistent - Does not give up easily' }
           ]
         },
         {
-          id: 'goals',
+          id: 'specific_challenges',
           type: 'multiple_choice',
-          question: "What skills would you like your child to develop? (Select all that apply)",
+          question: "Does your child face any of these challenges? (Select all that apply)",
           required: true,
           options: [
-            { value: 'creativity', label: 'Creativity & Artistic Expression' },
-            { value: 'problem_solving', label: 'Problem Solving & Critical Thinking' },
-            { value: 'communication', label: 'Communication & Public Speaking' },
-            { value: 'academic', label: 'Academic Skills (Reading, Math, etc.)' },
-            { value: 'confidence', label: 'Confidence & Self-Esteem' },
-            { value: 'discipline', label: 'Discipline & Focus' },
-            { value: 'leadership', label: 'Leadership & Teamwork' },
-            { value: 'technology', label: 'Technology & Digital Skills' }
+            { value: 'pronunciation', label: 'Difficulty with Pronunciation - Struggles to say words correctly' },
+            { value: 'spelling_errors', label: 'Frequent Spelling Errors - Makes many spelling mistakes' },
+            { value: 'reading_slowly', label: 'Reading Slowly - Takes time to read and decode words' },
+            { value: 'grammar_mistakes', label: 'Grammar Mistakes - Struggles with sentence structure' },
+            { value: 'speaking_fear', label: 'Fear of Speaking - Gets nervous talking in front of others' },
+            { value: 'comprehension', label: 'Comprehension Issues - Reads but does not understand the meaning' },
+            { value: 'vocabulary_limited', label: 'Limited Vocabulary - Knows few words for their age' },
+            { value: 'none', label: 'None of the Above - No specific challenges' }
           ]
         },
         {
-          id: 'time_commitment',
+          id: 'learning_preferences',
           type: 'single_choice',
-          question: "How much time can your child dedicate to learning per week?",
+          question: "How does your child enjoy learning most?",
           required: true,
           options: [
-            { value: 'low', label: '1-2 hours per week' },
-            { value: 'medium', label: '3-5 hours per week' },
-            { value: 'high', label: '6+ hours per week' }
+            { value: 'interactive_games', label: 'Through Games & Interactive Activities - Playful and engaging' },
+            { value: 'structured_lessons', label: 'Through Structured Lessons - Step-by-step with clear instructions' },
+            { value: 'stories_discussions', label: 'Through Stories & Discussions - Listening, talking, and sharing ideas' },
+            { value: 'hands_on_practice', label: 'Through Hands-On Practice - Doing activities and exercises' }
           ]
         },
         {
-          id: 'experience_level',
-          type: 'single_choice',
-          question: "What is your child's experience level with structured learning activities?",
-          required: true,
-          options: [
-            { value: 'beginner', label: 'Beginner - New to structured activities' },
-            { value: 'intermediate', label: 'Intermediate - Some experience with classes' },
-            { value: 'advanced', label: 'Advanced - Experienced with multiple activities' }
-          ]
-        },
-        {
-          id: 'challenges',
+          id: 'desired_outcomes',
           type: 'multiple_choice',
-          question: "Are there any specific areas where your child needs support? (Optional)",
-          required: false,
+          question: "What outcomes are you hoping for after the course? (Select all that apply)",
+          required: true,
           options: [
-            { value: 'concentration', label: 'Concentration & Focus' },
-            { value: 'confidence', label: 'Building Confidence' },
-            { value: 'social_skills', label: 'Social Skills' },
-            { value: 'academic_support', label: 'Academic Support' },
-            { value: 'creative_outlet', label: 'Creative Outlet' },
-            { value: 'physical_coordination', label: 'Physical Coordination' }
+            { value: 'confident_reader', label: 'Become a Confident Reader - Read books independently' },
+            { value: 'better_speller', label: 'Become a Better Speller - Win spelling competitions' },
+            { value: 'public_speaker', label: 'Become a Public Speaker - Speak confidently in front of groups' },
+            { value: 'grammar_master', label: 'Master Grammar - Write correct sentences' },
+            { value: 'storyteller', label: 'Become a Storyteller - Share ideas and stories creatively' },
+            { value: 'tech_literate', label: 'Become Tech-Literate - Use AI and technology safely' },
+            { value: 'academic_success', label: 'Improve Academic Performance - Better grades in school' },
+            { value: 'lifelong_learner', label: 'Develop Love for Learning - Enjoy reading and learning new things' }
           ]
         }
       ]
@@ -120,119 +124,188 @@ const getQuestionnaire = async (req, res, next) => {
   }
 };
 
-// Calculate recommendation scores
+// Calculate recommendation scores - Updated for 7 available courses
 const calculateRecommendations = (responses, coursesWithMetadata) => {
   const recommendations = [];
+
+  // Course mapping based on actual available courses
+  const courseKeywords = {
+    24: { // Public Speaking
+      keywords: ['public', 'speaking', 'communication'],
+      primary_interests: ['communication'],
+      goals: ['speaking_confidence', 'public_speaker', 'confident_reader'],
+      challenges: ['speaking_fear'],
+      reading_levels: ['confident', 'advanced'],
+      min_age: 7
+    },
+    25: { // Reader's Club - Intermediate
+      keywords: ['reader', 'intermediate', 'reading'],
+      primary_interests: ['reading_language'],
+      goals: ['reading_fluency', 'vocabulary', 'confident_reader', 'storyteller'],
+      challenges: ['reading_slowly', 'comprehension', 'vocabulary_limited'],
+      reading_levels: ['developing', 'confident'],
+      min_age: 5,
+      max_age: 7
+    },
+    26: { // Reader's Club - Beginner
+      keywords: ['reader', 'beginner', 'reading'],
+      primary_interests: ['reading_language'],
+      goals: ['phonics_pronunciation', 'reading_fluency', 'confident_reader'],
+      challenges: ['pronunciation', 'reading_slowly', 'comprehension'],
+      reading_levels: ['beginner', 'developing'],
+      min_age: 4,
+      max_age: 6
+    },
+    27: { // AI - Artificial Intelligence
+      keywords: ['ai', 'artificial', 'intelligence', 'technology'],
+      primary_interests: ['technology'],
+      goals: ['digital_skills', 'tech_literate'],
+      challenges: ['none'],
+      reading_levels: ['developing', 'confident', 'advanced'],
+      min_age: 6,
+      max_age: 10
+    },
+    28: { // Phonics - Intermediate
+      keywords: ['phonics', 'intermediate'],
+      primary_interests: ['reading_language', 'spelling_grammar'],
+      goals: ['phonics_pronunciation', 'spelling', 'reading_fluency'],
+      challenges: ['pronunciation', 'spelling_errors', 'reading_slowly'],
+      reading_levels: ['developing', 'confident'],
+      min_age: 5
+    },
+    29: { // Spell Bee
+      keywords: ['spell', 'bee', 'spelling'],
+      primary_interests: ['spelling_grammar'],
+      goals: ['spelling', 'better_speller', 'vocabulary'],
+      challenges: ['spelling_errors', 'vocabulary_limited'],
+      reading_levels: ['developing', 'confident', 'advanced'],
+      min_age: 6
+    },
+    30: { // Grammar - Basic
+      keywords: ['grammar', 'basic'],
+      primary_interests: ['spelling_grammar'],
+      goals: ['grammar', 'grammar_master', 'academic_success'],
+      challenges: ['grammar_mistakes', 'comprehension'],
+      reading_levels: ['developing', 'confident', 'advanced'],
+      min_age: 6
+    }
+  };
 
   coursesWithMetadata.forEach(course => {
     let score = 0;
     const reasons = [];
+    const courseMapping = courseKeywords[course.id];
 
-    // Age matching (20 points)
-    if (responses.child_age >= course.age_min && responses.child_age <= course.age_max) {
-      score += 20;
-    } else {
-      // Penalize if outside age range
-      return; // Skip this course
+    if (!courseMapping) {
+      // Skip courses without mapping
+      return;
     }
 
-    // Interest matching (25 points)
-    if (responses.interests && course.interests) {
-      const interestMatches = responses.interests.filter(interest => 
-        course.interests.includes(interest)
-      );
-      if (interestMatches.length > 0) {
-        const interestScore = (interestMatches.length / responses.interests.length) * 25;
-        score += interestScore;
-        reasons.push(`Matches ${interestMatches.length} of your child's interests`);
+    // Age matching (25 points) - CRITICAL
+    const courseMinAge = courseMapping.min_age || 3;
+    const courseMaxAge = courseMapping.max_age || 18;
+    
+    if (responses.child_age >= courseMinAge && responses.child_age <= courseMaxAge) {
+      score += 25;
+      if (responses.child_age >= courseMinAge && responses.child_age <= courseMinAge + 2) {
+        score += 5; // Bonus for being in ideal age range
+        reasons.push(`Perfect age match for this course`);
+      }
+    } else if (responses.child_age < courseMinAge) {
+      score -= 20; // Penalize if too young
+    } else if (responses.child_age > courseMaxAge) {
+      score -= 10; // Smaller penalty if too old
+    }
+
+    // Primary Interest matching (30 points) - MOST IMPORTANT
+    if (responses.primary_interest && courseMapping.primary_interests) {
+      if (courseMapping.primary_interests.includes(responses.primary_interest)) {
+        score += 30;
+        reasons.push(`Matches your child primary interest in ${responses.primary_interest.replace('_', ' ')}`);
       }
     }
 
-    // Learning style matching (20 points)
-    if (responses.learning_style && course.learning_style) {
-      if (course.learning_style.includes(responses.learning_style)) {
+    // Reading Level matching (20 points) - VERY IMPORTANT for literacy courses
+    if (responses.current_reading_level && courseMapping.reading_levels) {
+      if (courseMapping.reading_levels.includes(responses.current_reading_level)) {
         score += 20;
-        reasons.push(`Suits ${responses.learning_style} learning style`);
+        reasons.push(`Appropriate for ${responses.current_reading_level} reading level`);
       }
     }
 
-    // Personality matching (15 points)
-    if (responses.personality && course.personality_traits) {
-      const personalityMatches = responses.personality.filter(trait => 
-        course.personality_traits.includes(trait)
+    // Learning Goals matching (15 points)
+    if (responses.learning_goals && courseMapping.goals) {
+      const goalMatches = responses.learning_goals.filter(goal => 
+        courseMapping.goals.includes(goal)
       );
-      if (personalityMatches.length > 0) {
-        const personalityScore = (personalityMatches.length / responses.personality.length) * 15;
-        score += personalityScore;
-        reasons.push(`Aligns with your child's personality traits`);
-      }
-    }
-
-    // Goals/Skills matching (15 points)
-    if (responses.goals && course.skills_developed) {
-      const goalMatches = responses.goals.filter(goal => {
-        // Map goals to skills
-        const goalSkillMap = {
-          'creativity': ['creativity', 'creative', 'artistic', 'imagination'],
-          'problem_solving': ['problem_solving', 'critical_thinking', 'logical_reasoning', 'strategic_thinking'],
-          'communication': ['communication', 'public_speaking', 'articulation', 'presentation'],
-          'academic': ['reading', 'language', 'literacy', 'mental_math', 'mathematics'],
-          'confidence': ['confidence', 'self_expression', 'leadership'],
-          'discipline': ['discipline', 'focus', 'concentration', 'patience'],
-          'leadership': ['leadership', 'communication', 'confidence'],
-          'technology': ['technology', 'coding', 'digital_literacy', 'computers']
-        };
-
-        const relatedSkills = goalSkillMap[goal] || [goal];
-        return course.skills_developed.some(skill => 
-          relatedSkills.some(rs => skill.toLowerCase().includes(rs.toLowerCase()))
-        );
-      });
-
       if (goalMatches.length > 0) {
-        const goalScore = (goalMatches.length / responses.goals.length) * 15;
+        const goalScore = Math.min((goalMatches.length / responses.learning_goals.length) * 15, 15);
         score += goalScore;
-        reasons.push(`Develops ${goalMatches.length} of your desired skills`);
+        reasons.push(`Addresses ${goalMatches.length} of your learning goals`);
       }
     }
 
-    // Time commitment matching (5 points)
-    if (responses.time_commitment === course.time_commitment) {
-      score += 5;
-      reasons.push(`Matches your available time commitment`);
+    // Challenges matching (10 points) - Helps address specific problems
+    if (responses.specific_challenges && courseMapping.challenges) {
+      const challengeMatches = responses.specific_challenges.filter(challenge => 
+        courseMapping.challenges.includes(challenge) || courseMapping.challenges.includes('none')
+      );
+      if (challengeMatches.length > 0 && !responses.specific_challenges.includes('none')) {
+        score += 10;
+        reasons.push(`Helps overcome specific challenges`);
+      }
     }
 
-    // Experience level matching (5 points)
-    if (responses.experience_level === course.difficulty_level) {
-      score += 5;
-      reasons.push(`Appropriate for ${responses.experience_level} level`);
-    }
-
-    // Challenge-based bonus (bonus points)
-    if (responses.challenges && responses.challenges.length > 0) {
-      const challengeSkillMap = {
-        'concentration': ['concentration', 'focus', 'memory', 'discipline'],
-        'confidence': ['confidence', 'self_expression', 'communication', 'leadership'],
-        'social_skills': ['communication', 'leadership', 'social'],
-        'academic_support': ['reading', 'language', 'mathematics', 'literacy'],
-        'creative_outlet': ['creativity', 'artistic', 'imagination', 'self_expression'],
-        'physical_coordination': ['coordination', 'fine_motor_skills', 'hands-on']
+    // Personality traits matching (5 points)
+    if (responses.personality_traits) {
+      const personalityBonus = {
+        'shy_quiet': ['26', '25', '28'], // Reader's Club, Phonics
+        'confident_expressive': ['24', '29'], // Public Speaking, Spell Bee
+        'curious_eager': ['27', '26', '25'], // AI, Reader's Club
+        'creative_imaginative': ['26', '25', '27'], // Reader's Club, AI
+        'focused_detail': ['29', '30', '28'], // Spell Bee, Grammar, Phonics
+        'tech_savvy': ['27'], // AI
+        'competitive': ['29', '24'], // Spell Bee, Public Speaking
+        'patient_persistent': ['28', '30', '29'] // Phonics, Grammar, Spell Bee
       };
 
-      responses.challenges.forEach(challenge => {
-        const relatedSkills = challengeSkillMap[challenge] || [];
-        const hasMatchingSkill = course.skills_developed.some(skill =>
-          relatedSkills.some(rs => skill.toLowerCase().includes(rs.toLowerCase()))
-        );
-        if (hasMatchingSkill) {
-          score += 3;
-          reasons.push(`Helps address ${challenge.replace('_', ' ')}`);
+      responses.personality_traits.forEach(trait => {
+        if (personalityBonus[trait] && personalityBonus[trait].includes(String(course.id))) {
+          score += 5;
+          reasons.push(`Great fit for ${trait.replace('_', ' ')} personality`);
         }
       });
     }
 
-    // Only include courses with a minimum score
-    if (score >= 30) {
+    // Desired Outcomes matching (10 points)
+    if (responses.desired_outcomes && courseMapping.goals) {
+      const outcomeMatches = responses.desired_outcomes.filter(outcome => 
+        courseMapping.goals.includes(outcome)
+      );
+      if (outcomeMatches.length > 0) {
+        score += 10;
+        reasons.push(`Achieves ${outcomeMatches.length} of your desired outcomes`);
+      }
+    }
+
+    // Learning Preferences bonus (5 points)
+    const preferenceBonus = {
+      'interactive_games': ['26', '27', '28'], // Reader's Club Beginner, AI, Phonics
+      'structured_lessons': ['30', '28', '29'], // Grammar, Phonics, Spell Bee
+      'stories_discussions': ['25', '26', '24'], // Reader's Club, Public Speaking
+      'hands_on_practice': ['28', '29', '30'] // Phonics, Spell Bee, Grammar
+    };
+
+    if (responses.learning_preferences) {
+      if (preferenceBonus[responses.learning_preferences] && 
+          preferenceBonus[responses.learning_preferences].includes(String(course.id))) {
+        score += 5;
+        reasons.push(`Matches ${responses.learning_preferences.replace('_', ' ')} learning style`);
+      }
+    }
+
+    // Only include courses with a minimum score of 40 (out of ~100+)
+    if (score >= 40) {
       recommendations.push({
         course_id: course.id,
         course_title: course.title,
@@ -242,8 +315,12 @@ const calculateRecommendations = (responses, coursesWithMetadata) => {
         course_level: course.level,
         score: Math.round(score),
         reasons: reasons,
-        benefits: course.benefits || [],
-        skills_developed: course.skills_developed || []
+        benefits: [
+          course.what_you_learn || 'Comprehensive skill development',
+          'Live interactive classes with expert instructors',
+          'Personalized attention and feedback'
+        ],
+        skills_developed: courseMapping.goals || []
       });
     }
   });
@@ -282,6 +359,7 @@ const submitQuestionnaire = async (req, res, next) => {
         c.price,
         c.thumbnail_url,
         c.level,
+        c.what_you_learn,
         cm.age_min,
         cm.age_max,
         cm.skills_developed,
@@ -294,7 +372,6 @@ const submitQuestionnaire = async (req, res, next) => {
       FROM courses c
       LEFT JOIN course_metadata cm ON c.id = cm.course_id
       WHERE c.status = 'published'
-      AND cm.id IS NOT NULL
     `;
 
     const coursesResult = await pool.query(coursesQuery);
