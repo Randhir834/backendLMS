@@ -314,28 +314,24 @@ const getStudentDetailedStats = async (studentId) => {
       [enrollment.course_id]
     );
 
-    // Get lesson progress count (from lesson_progress table)
-    const lessonProgressResult = await query(
+    // Get lesson completion count from lesson_completions table
+    const lessonCompletionResult = await query(
       `SELECT COUNT(*) as completed_count
-       FROM lesson_progress lp
-       JOIN lessons l ON lp.lesson_id = l.id
-       JOIN sections s ON l.section_id = s.id
-       WHERE s.course_id = $1 AND lp.student_id = $2 AND lp.status = 'completed'`,
-      [enrollment.course_id, studentId]
+       FROM lesson_completions lc
+       WHERE lc.enrollment_id = $1`,
+      [enrollment.enrollment_id]
     );
 
     // Calculate progress percentage
-    const completedFromDB = parseInt(lessonProgressResult.rows[0]?.completed_count || 0);
-    const completedFromManual = enrollment.manual_completed_lessons || 0;
-    const totalCompleted = Math.max(completedFromDB, completedFromManual);
+    const completedLessons = parseInt(lessonCompletionResult.rows[0]?.completed_count || 0);
     const totalLessons = enrollment.total_lessons || 0;
-    const progressPercentage = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+    const progressPercentage = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
 
     return {
       ...enrollment,
       live_classes: liveClassesResult.rows,
       total_live_classes: liveClassesResult.rows.length,
-      completed_lessons: totalCompleted,
+      completed_lessons: completedLessons,
       total_lessons: totalLessons,
       progress_percentage: progressPercentage
     };
@@ -386,21 +382,16 @@ const getAllStudentsWithStats = async () => {
       [student.id]
     );
 
-    // Get total completed lessons
-    const progressResult = await query(
-      `SELECT 
-        COALESCE(SUM(e.manual_completed_lessons), 0) as manual_completed,
-        COUNT(DISTINCT lp.id) FILTER (WHERE lp.status = 'completed') as db_completed
-       FROM enrollments e
-       LEFT JOIN courses c ON e.course_id = c.id
-       LEFT JOIN sections s ON s.course_id = c.id
-       LEFT JOIN lessons l ON l.section_id = s.id
-       LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.student_id = e.user_id
+    // Get total completed lessons from lesson_completions
+    const completedLessonsResult = await query(
+      `SELECT COUNT(*) as count
+       FROM lesson_completions lc
+       JOIN enrollments e ON lc.enrollment_id = e.id
        WHERE e.user_id = $1`,
       [student.id]
     );
 
-    // Get total lessons
+    // Get total lessons from all enrolled courses
     const totalLessonsResult = await query(
       `SELECT COALESCE(SUM(c.total_lessons), 0) as total
        FROM enrollments e
@@ -409,11 +400,9 @@ const getAllStudentsWithStats = async () => {
       [student.id]
     );
 
-    const manualCompleted = parseInt(progressResult.rows[0]?.manual_completed || 0);
-    const dbCompleted = parseInt(progressResult.rows[0]?.db_completed || 0);
-    const totalCompleted = Math.max(manualCompleted, dbCompleted);
+    const lessonsCompleted = parseInt(completedLessonsResult.rows[0]?.count || 0);
     const totalLessons = parseInt(totalLessonsResult.rows[0]?.total || 0);
-    const progressPercentage = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+    const progressPercentage = totalLessons > 0 ? Math.round((lessonsCompleted / totalLessons) * 100) : 0;
 
     return {
       ...student,
@@ -421,7 +410,7 @@ const getAllStudentsWithStats = async () => {
       date_of_birth: student.date_of_birth ? student.date_of_birth.toISOString().split('T')[0] : null,
       total_enrollments: parseInt(enrollmentResult.rows[0].count),
       total_live_classes: parseInt(liveClassResult.rows[0].count),
-      lessons_completed: totalCompleted,
+      lessons_completed: lessonsCompleted,
       total_lessons: totalLessons,
       progress_percentage: progressPercentage
     };

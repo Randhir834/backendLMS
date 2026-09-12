@@ -40,8 +40,34 @@ const uploadToSupabase = async (file, folder = 'general') => {
   const ext = path.extname(file.originalname);
   const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}${ext}`;
 
+  // Check if we should use local storage (default for development)
+  const useLocalStorage = process.env.USE_LOCAL_STORAGE === 'true' || process.env.NODE_ENV === 'development';
+
+  if (useLocalStorage) {
+    console.log('Using local storage for file upload');
+    
+    // Use local storage
+    const filePath = path.join(uploadsDir, fileName);
+    const folderPath = path.dirname(filePath);
+    
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath, { recursive: true });
+    }
+
+    fs.writeFileSync(filePath, file.buffer);
+
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
+    const publicUrl = `${backendUrl}/uploads/${fileName}`;
+
+    return {
+      path: fileName,
+      publicUrl: publicUrl,
+      storage: 'local'
+    };
+  }
+
+  // Only try Supabase if explicitly enabled in production
   try {
-    // Try Supabase Storage first
     const supabase = getSupabaseClient();
     const bucket = process.env.SUPABASE_BUCKET || 'playfit-storage';
 
@@ -66,11 +92,12 @@ const uploadToSupabase = async (file, folder = 'general') => {
     return {
       path: fileName,
       publicUrl: publicUrlData.publicUrl,
+      storage: 'supabase'
     };
   } catch (err) {
     console.error('Supabase upload failed, falling back to local storage:', err.message);
     
-    // Fallback to local storage for development
+    // Fallback to local storage
     const filePath = path.join(uploadsDir, fileName);
     const folderPath = path.dirname(filePath);
     
@@ -86,6 +113,7 @@ const uploadToSupabase = async (file, folder = 'general') => {
     return {
       path: fileName,
       publicUrl: publicUrl,
+      storage: 'local'
     };
   }
 };
