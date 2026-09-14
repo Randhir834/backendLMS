@@ -13,7 +13,7 @@ const markLessonComplete = async (enrollmentId, lessonNumber, instructorId, note
 
   // Verify enrollment exists and instructor has access
   const enrollmentCheck = await query(
-    `SELECT e.id, e.user_id, e.course_id, c.number_of_lessons
+    `SELECT e.id, e.user_id, e.course_id, c.total_lessons
      FROM enrollments e
      JOIN courses c ON e.course_id = c.id
      JOIN course_instructors ci ON c.id = ci.course_id
@@ -26,7 +26,7 @@ const markLessonComplete = async (enrollmentId, lessonNumber, instructorId, note
   }
 
   const enrollment = enrollmentCheck.rows[0];
-  const totalLessons = enrollment.number_of_lessons || 0;
+  const totalLessons = enrollment.total_lessons || 0;
 
   // Validate lesson number
   if (lessonNumber < 1 || (totalLessons > 0 && lessonNumber > totalLessons)) {
@@ -128,18 +128,18 @@ const getStudentProgress = async (userId, courseId) => {
       e.id as enrollment_id,
       c.id as course_id,
       c.title as course_title,
-      c.number_of_lessons as total_lessons,
+      c.total_lessons as total_lessons,
       COUNT(lc.id)::INTEGER as completed_lessons,
       CASE 
-        WHEN c.number_of_lessons > 0 
-        THEN ROUND((COUNT(lc.id)::DECIMAL / c.number_of_lessons) * 100, 2)
+        WHEN c.total_lessons > 0 
+        THEN ROUND((COUNT(lc.id)::DECIMAL / c.total_lessons) * 100, 2)
         ELSE 0
       END as progress_percentage
      FROM enrollments e
      JOIN courses c ON e.course_id = c.id
      LEFT JOIN lesson_completions lc ON e.id = lc.enrollment_id
      WHERE e.user_id = $1 AND e.course_id = $2
-     GROUP BY e.id, c.id, c.title, c.number_of_lessons`,
+     GROUP BY e.id, c.id, c.title, c.total_lessons`,
     [userId, courseId]
   );
 
@@ -165,12 +165,12 @@ const getInstructorStudentProgress = async (instructorId, studentId) => {
       c.id as course_id,
       c.title as course_title,
       c.description as course_description,
-      c.number_of_lessons as total_lessons,
+      c.total_lessons as total_lessons,
       c.google_meet_link,
       COUNT(lc.id)::INTEGER as completed_lessons,
       CASE 
-        WHEN c.number_of_lessons > 0 
-        THEN ROUND((COUNT(lc.id)::DECIMAL / c.number_of_lessons) * 100, 2)
+        WHEN c.total_lessons > 0 
+        THEN ROUND((COUNT(lc.id)::DECIMAL / c.total_lessons) * 100, 2)
         ELSE 0
       END as progress_percentage,
       json_agg(
@@ -185,7 +185,7 @@ const getInstructorStudentProgress = async (instructorId, studentId) => {
      JOIN course_instructors ci ON c.id = ci.course_id
      LEFT JOIN lesson_completions lc ON e.id = lc.enrollment_id
      WHERE ci.instructor_id = $1 AND e.user_id = $2
-     GROUP BY e.id, e.status, e.enrolled_at, c.id, c.title, c.description, c.number_of_lessons, c.google_meet_link
+     GROUP BY e.id, e.status, e.enrolled_at, c.id, c.title, c.description, c.total_lessons, c.google_meet_link
      ORDER BY e.enrolled_at DESC`,
     [instructorId, studentId]
   );
@@ -205,7 +205,7 @@ const bulkMarkLessonsComplete = async (enrollmentId, lessonNumbers, instructorId
 
   // Verify access
   const accessCheck = await query(
-    `SELECT e.id, c.number_of_lessons
+    `SELECT e.id, c.total_lessons
      FROM enrollments e
      JOIN courses c ON e.course_id = c.id
      JOIN course_instructors ci ON c.id = ci.course_id
@@ -217,7 +217,7 @@ const bulkMarkLessonsComplete = async (enrollmentId, lessonNumbers, instructorId
     throw new Error('Enrollment not found or you do not have access to this course');
   }
 
-  const totalLessons = accessCheck.rows[0].number_of_lessons || 0;
+  const totalLessons = accessCheck.rows[0].total_lessons || 0;
 
   // Validate all lesson numbers
   for (const lessonNum of lessonNumbers) {
