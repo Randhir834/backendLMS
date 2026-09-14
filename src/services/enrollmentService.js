@@ -311,7 +311,7 @@ const getStudentEnrolledCoursesByInstructor = async (instructor_id, student_id) 
       e.id AS enrollment_id,
       e.status AS enrollment_status,
       e.enrolled_at,
-      COALESCE(e.manual_completed_lessons, 0) AS completed_lessons
+      (SELECT COUNT(*)::INTEGER FROM lesson_completions lc WHERE lc.enrollment_id = e.id) AS completed_lessons
     FROM enrollments e
     JOIN courses c ON e.course_id = c.id
     JOIN course_instructors ci ON c.id = ci.course_id
