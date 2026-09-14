@@ -25,31 +25,35 @@ const enrollCourse = async (req, res, next) => {
     // Create enrollment first
     const enrollment = await createEnrollment({ user_id: req.user.id, course_id });
     
-    // If course has a price, create payment record
-    if (course.price > 0) {
-      if (!payment_method) {
-        return res.status(400).json({ error: 'Payment method is required for paid courses' });
-      }
-      
-      const payment = await createPaymentRecord({
-        user_id: req.user.id,
-        enrollment_id: enrollment.id,
-        amount: course.price,
-        payment_method
-      });
-      
+    // ===== PAYMENT DISABLED - DIRECT ENROLLMENT ENABLED =====
+    // Students can now enroll directly without payment
+    // Payment functionality commented out below
+    
+    // if (course.price > 0) {
+    //   if (!payment_method) {
+    //     return res.status(400).json({ error: 'Payment method is required for paid courses' });
+    //   }
+    //   
+    //   const payment = await createPaymentRecord({
+    //     user_id: req.user.id,
+    //     enrollment_id: enrollment.id,
+    //     amount: course.price,
+    //     payment_method
+    //   });
+    //   
+    //   res.status(201).json({ 
+    //     message: 'Enrolled successfully. Payment pending.', 
+    //     enrollment,
+    //     payment,
+    //     course_price: course.price
+    //   });
+    // } else {
       res.status(201).json({ 
-        message: 'Enrolled successfully. Payment pending.', 
+        message: 'Enrolled successfully', 
         enrollment,
-        payment,
-        course_price: course.price
+        note: 'Payment is currently disabled. Direct enrollment is enabled.'
       });
-    } else {
-      res.status(201).json({ 
-        message: 'Enrolled successfully in free course', 
-        enrollment 
-      });
-    }
+    // }
   } catch (error) {
     if (error.statusCode) {
       return res.status(error.statusCode).json({ error: error.message });
