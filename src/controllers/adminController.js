@@ -4,6 +4,8 @@ const {
   createInstructor, getStudentDetailedStats, getAllStudentsWithStats
 } = require('../services/adminService');
 
+const { adminEnrollStudent } = require('../services/enrollmentService');
+
 const {
   broadcastUserUpdate,
   broadcastUserDelete,
@@ -281,6 +283,44 @@ const getStudentsWithStats = async (req, res, next) => {
   }
 };
 
+// Enroll a student in a course (admin action)
+const enrollStudentInCourse = async (req, res, next) => {
+  try {
+    const studentId = parseInt(req.params.studentId);
+    const { course_id } = req.body;
+
+    if (isNaN(studentId)) {
+      return res.status(400).json({ error: 'Invalid student ID' });
+    }
+
+    if (!course_id) {
+      return res.status(400).json({ error: 'Course ID is required' });
+    }
+
+    const enrollment = await adminEnrollStudent({
+      student_id: studentId,
+      course_id: parseInt(course_id)
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Student enrolled successfully',
+      enrollment
+    });
+  } catch (error) {
+    if (error.statusCode === 409) {
+      return res.status(409).json({ error: error.message });
+    }
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error.statusCode === 400) {
+      return res.status(400).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
 module.exports = { 
   getUsers, 
   getUserById, 
@@ -293,5 +333,6 @@ module.exports = {
   getAnalytics, 
   createInstructorAccount,
   getStudentStats,
-  getStudentsWithStats
+  getStudentsWithStats,
+  enrollStudentInCourse
 };

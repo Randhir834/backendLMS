@@ -369,6 +369,52 @@ const updateManualCompletedLessons = async (enrollment_id, completed_lessons, in
   return result.rows[0];
 };
 
+// Admin function to enroll a student in a course (bypasses published status check)
+const adminEnrollStudent = async ({ student_id, course_id }) => {
+  const existing = await query(
+    'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
+    [student_id, course_id]
+  );
+  if (existing.rows.length > 0) {
+    const err = new Error('Student is already enrolled in this course');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  // Verify student exists and has student role
+  const studentCheck = await query(
+    "SELECT id, role FROM users WHERE id = $1",
+    [student_id]
+  );
+  if (!studentCheck.rows[0]) {
+    const err = new Error('Student not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (studentCheck.rows[0].role !== 'student') {
+    const err = new Error('User is not a student');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Verify course exists (admin can enroll in any course regardless of status)
+  const course = await query(
+    "SELECT id, title, status FROM courses WHERE id = $1",
+    [course_id]
+  );
+  if (!course.rows[0]) {
+    const err = new Error('Course not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const result = await query(
+    'INSERT INTO enrollments (user_id, course_id) VALUES ($1, $2) RETURNING *',
+    [student_id, course_id]
+  );
+  return result.rows[0];
+};
+
 module.exports = {
   createEnrollment,
   findEnrollmentsByUser,
@@ -382,4 +428,5 @@ module.exports = {
   getInstructorStudentStats,
   getStudentEnrolledCoursesByInstructor,
   updateManualCompletedLessons,
+  adminEnrollStudent,
 };

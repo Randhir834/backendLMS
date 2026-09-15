@@ -2,7 +2,7 @@ const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { authorizeRoles } = require('../middleware/roleMiddleware');
 const { adminAccessControl, auditAdminAction } = require('../middleware/adminAccessControl');
-const { getUsers, getUserById, updateUserRoleController, updateUserController, deleteUser, getUserDeletionImpact, archiveUser, deleteMultipleUsers, getAnalytics, createInstructorAccount, getStudentStats, getStudentsWithStats } = require('../controllers/adminController');
+const { getUsers, getUserById, updateUserRoleController, updateUserController, deleteUser, getUserDeletionImpact, archiveUser, deleteMultipleUsers, getAnalytics, createInstructorAccount, getStudentStats, getStudentsWithStats, enrollStudentInCourse } = require('../controllers/adminController');
 
 const router = express.Router();
 
@@ -19,6 +19,9 @@ router.put('/users/:id/role', auditAdminAction('UPDATE_USER_ROLE'), updateUserRo
 // Student statistics endpoints
 router.get('/students/stats', auditAdminAction('GET_STUDENTS_STATS'), getStudentsWithStats);
 router.get('/students/:id/stats', auditAdminAction('GET_STUDENT_STATS'), getStudentStats);
+
+// Student enrollment endpoint
+router.post('/students/:studentId/enroll', auditAdminAction('ENROLL_STUDENT'), enrollStudentInCourse);
 
 // User deletion endpoints
 router.get('/users/:id/deletion-impact', auditAdminAction('GET_USER_DELETION_IMPACT'), getUserDeletionImpact);
