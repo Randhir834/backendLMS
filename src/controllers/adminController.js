@@ -287,7 +287,7 @@ const getStudentsWithStats = async (req, res, next) => {
 const enrollStudentInCourse = async (req, res, next) => {
   try {
     const studentId = parseInt(req.params.studentId);
-    const { course_id } = req.body;
+    const { course_id, instructor_id } = req.body;
 
     if (isNaN(studentId)) {
       return res.status(400).json({ error: 'Invalid student ID' });
@@ -297,9 +297,19 @@ const enrollStudentInCourse = async (req, res, next) => {
       return res.status(400).json({ error: 'Course ID is required' });
     }
 
+    // Parse instructor_id if provided
+    let assignedInstructorId = null;
+    if (instructor_id) {
+      assignedInstructorId = parseInt(instructor_id);
+      if (isNaN(assignedInstructorId)) {
+        return res.status(400).json({ error: 'Invalid instructor ID' });
+      }
+    }
+
     const enrollment = await adminEnrollStudent({
       student_id: studentId,
-      course_id: parseInt(course_id)
+      course_id: parseInt(course_id),
+      assigned_instructor_id: assignedInstructorId
     });
 
     res.status(201).json({
@@ -321,6 +331,27 @@ const enrollStudentInCourse = async (req, res, next) => {
   }
 };
 
+// Get all instructors for admin selection
+const getInstructors = async (req, res, next) => {
+  try {
+    const { query } = require('../config/database');
+    const result = await query(
+      `SELECT id, name, email, phone, location, qualifications, specialization, avatar_url, created_at
+       FROM users 
+       WHERE role = 'instructor'
+       ORDER BY name ASC`
+    );
+    
+    res.json({ 
+      instructors: result.rows,
+      total: result.rows.length
+    });
+  } catch (error) {
+    console.error('Get instructors error:', error);
+    next(error);
+  }
+};
+
 module.exports = { 
   getUsers, 
   getUserById, 
@@ -334,5 +365,6 @@ module.exports = {
   createInstructorAccount,
   getStudentStats,
   getStudentsWithStats,
-  enrollStudentInCourse
+  enrollStudentInCourse,
+  getInstructors
 };

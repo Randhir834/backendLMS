@@ -2,7 +2,7 @@ const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { authorizeRoles } = require('../middleware/roleMiddleware');
 const { adminAccessControl, auditAdminAction } = require('../middleware/adminAccessControl');
-const { getUsers, getUserById, updateUserRoleController, updateUserController, deleteUser, getUserDeletionImpact, archiveUser, deleteMultipleUsers, getAnalytics, createInstructorAccount, getStudentStats, getStudentsWithStats, enrollStudentInCourse } = require('../controllers/adminController');
+const { getUsers, getUserById, updateUserRoleController, updateUserController, deleteUser, getUserDeletionImpact, archiveUser, deleteMultipleUsers, getAnalytics, createInstructorAccount, getStudentStats, getStudentsWithStats, enrollStudentInCourse, getInstructors } = require('../controllers/adminController');
 
 const router = express.Router();
 
@@ -15,6 +15,10 @@ router.get('/users', auditAdminAction('GET_USERS'), getUsers);
 router.get('/users/:id', auditAdminAction('GET_USER'), getUserById);
 router.put('/users/:id', auditAdminAction('UPDATE_USER'), updateUserController);
 router.put('/users/:id/role', auditAdminAction('UPDATE_USER_ROLE'), updateUserRoleController);
+
+// Instructor endpoints
+router.get('/instructors', auditAdminAction('GET_INSTRUCTORS'), getInstructors);
+router.post('/instructors/create', auditAdminAction('CREATE_INSTRUCTOR'), createInstructorAccount);
 
 // Student statistics endpoints
 router.get('/students/stats', auditAdminAction('GET_STUDENTS_STATS'), getStudentsWithStats);
@@ -30,7 +34,6 @@ router.post('/users/:id/archive', auditAdminAction('ARCHIVE_USER'), archiveUser)
 router.post('/users/delete-multiple', auditAdminAction('DELETE_MULTIPLE_USERS'), deleteMultipleUsers);
 
 router.get('/analytics', auditAdminAction('GET_ANALYTICS'), getAnalytics);
-router.post('/instructors/create', auditAdminAction('CREATE_INSTRUCTOR'), createInstructorAccount);
 
 // Test endpoint
 router.get('/test', (req, res) => {

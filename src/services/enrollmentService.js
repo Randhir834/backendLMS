@@ -37,6 +37,7 @@ const findEnrollmentsByUser = async (user_id) => {
   const result = await query(
     `SELECT e.*, c.title AS course_title, c.description AS course_description,
       c.thumbnail_url, c.price, c.duration_value, c.duration_unit, c.level, c.status AS course_status,
+      ai.id AS assigned_instructor_id, ai.name AS assigned_instructor_name, ai.email AS assigned_instructor_email,
       COALESCE(
         json_agg(
           json_build_object('id', u.id, 'name', u.name, 'email', u.email, 'is_primary', ci.is_primary)
@@ -45,10 +46,11 @@ const findEnrollmentsByUser = async (user_id) => {
       ) AS instructors
     FROM enrollments e
     JOIN courses c ON e.course_id = c.id
+    LEFT JOIN users ai ON e.assigned_instructor_id = ai.id
     LEFT JOIN course_instructors ci ON ci.course_id = c.id
     LEFT JOIN users u ON ci.instructor_id = u.id
     WHERE e.user_id = $1
-    GROUP BY e.id, c.id
+    GROUP BY e.id, c.id, ai.id
     ORDER BY e.created_at DESC`,
     [user_id]
   );
@@ -181,7 +183,7 @@ const getCourseEnrollmentStats = async (course_id) => {
 const findStudentsByInstructor = async (instructor_id, filters = {}) => {
   const { search, sort_by = 'student_name', sort_order = 'asc', course_filter } = filters;
   
-  // First, get all unique student-course pairs for this instructor
+  // Get students assigned to this instructor OR students in courses the instructor teaches
   let sql = `
     WITH student_courses AS (
       SELECT DISTINCT
@@ -198,13 +200,20 @@ const findStudentsByInstructor = async (instructor_id, filters = {}) => {
         e.id AS enrollment_id,
         e.status AS enrollment_status,
         e.enrolled_at,
-        e.completed_at
+        e.completed_at,
+        e.assigned_instructor_id,
+        CASE WHEN e.assigned_instructor_id = $1 THEN true ELSE false END AS is_directly_assigned
       FROM users u
       JOIN enrollments e ON u.id = e.user_id
       JOIN courses c ON e.course_id = c.id
-      JOIN course_instructors ci ON c.id = ci.course_id
-      WHERE ci.instructor_id = $1
-        AND u.role = 'student'
+      WHERE u.role = 'student'
+        AND (
+          e.assigned_instructor_id = $1 
+          OR EXISTS (
+            SELECT 1 FROM course_instructors ci 
+            WHERE ci.course_id = c.id AND ci.instructor_id = $1
+          )
+        )
   `;
   
   const params = [instructor_id];
@@ -234,6 +243,7 @@ const findStudentsByInstructor = async (instructor_id, filters = {}) => {
       school,
       avatar_url,
       COUNT(DISTINCT course_id) AS total_courses_enrolled,
+      COUNT(*) FILTER (WHERE is_directly_assigned = true) AS directly_assigned_courses,
       json_agg(
         json_build_object(
           'course_id', course_id,
@@ -241,7 +251,8 @@ const findStudentsByInstructor = async (instructor_id, filters = {}) => {
           'enrollment_id', enrollment_id,
           'enrollment_status', enrollment_status,
           'enrolled_at', enrolled_at,
-          'completed_at', completed_at
+          'completed_at', completed_at,
+          'is_directly_assigned', is_directly_assigned
         ) ORDER BY enrolled_at DESC
       ) AS courses
     FROM student_courses
@@ -272,13 +283,19 @@ const getInstructorStudentStats = async (instructor_id) => {
       COUNT(DISTINCT u.id) AS total_students,
       COUNT(DISTINCT CASE WHEN e.enrolled_at >= NOW() - INTERVAL '7 days' THEN u.id END) AS new_students_week,
       COUNT(DISTINCT CASE WHEN e.enrolled_at >= NOW() - INTERVAL '30 days' THEN u.id END) AS new_students_month,
-      COUNT(DISTINCT c.id) AS total_courses
+      COUNT(DISTINCT c.id) AS total_courses,
+      COUNT(DISTINCT CASE WHEN e.assigned_instructor_id = $1 THEN u.id END) AS directly_assigned_students
     FROM users u
     JOIN enrollments e ON u.id = e.user_id
     JOIN courses c ON e.course_id = c.id
-    JOIN course_instructors ci ON c.id = ci.course_id
-    WHERE ci.instructor_id = $1
-      AND u.role = 'student'`,
+    WHERE u.role = 'student'
+      AND (
+        e.assigned_instructor_id = $1 
+        OR EXISTS (
+          SELECT 1 FROM course_instructors ci 
+          WHERE ci.course_id = c.id AND ci.instructor_id = $1
+        )
+      )`,
     [instructor_id]
   );
   
@@ -288,7 +305,8 @@ const getInstructorStudentStats = async (instructor_id) => {
       total_students: 0,
       new_students_week: 0,
       new_students_month: 0,
-      total_courses: 0
+      total_courses: 0,
+      directly_assigned_students: 0
     };
   }
   
@@ -311,12 +329,19 @@ const getStudentEnrolledCoursesByInstructor = async (instructor_id, student_id) 
       e.id AS enrollment_id,
       e.status AS enrollment_status,
       e.enrolled_at,
+      e.assigned_instructor_id,
+      CASE WHEN e.assigned_instructor_id = $1 THEN true ELSE false END AS is_directly_assigned,
       (SELECT COUNT(*)::INTEGER FROM lesson_completions lc WHERE lc.enrollment_id = e.id) AS completed_lessons
     FROM enrollments e
     JOIN courses c ON e.course_id = c.id
-    JOIN course_instructors ci ON c.id = ci.course_id
-    WHERE ci.instructor_id = $1
-      AND e.user_id = $2
+    WHERE e.user_id = $2
+      AND (
+        e.assigned_instructor_id = $1 
+        OR EXISTS (
+          SELECT 1 FROM course_instructors ci 
+          WHERE ci.course_id = c.id AND ci.instructor_id = $1
+        )
+      )
     ORDER BY e.enrolled_at DESC`,
     [instructor_id, student_id]
   );
@@ -370,7 +395,7 @@ const updateManualCompletedLessons = async (enrollment_id, completed_lessons, in
 };
 
 // Admin function to enroll a student in a course (bypasses published status check)
-const adminEnrollStudent = async ({ student_id, course_id }) => {
+const adminEnrollStudent = async ({ student_id, course_id, assigned_instructor_id = null }) => {
   const existing = await query(
     'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
     [student_id, course_id]
@@ -408,9 +433,27 @@ const adminEnrollStudent = async ({ student_id, course_id }) => {
     throw err;
   }
 
+  // If instructor is assigned, verify the instructor exists and has instructor role
+  if (assigned_instructor_id) {
+    const instructorCheck = await query(
+      "SELECT id, role, name FROM users WHERE id = $1",
+      [assigned_instructor_id]
+    );
+    if (!instructorCheck.rows[0]) {
+      const err = new Error('Assigned instructor not found');
+      err.statusCode = 404;
+      throw err;
+    }
+    if (instructorCheck.rows[0].role !== 'instructor') {
+      const err = new Error('Assigned user is not an instructor');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
   const result = await query(
-    'INSERT INTO enrollments (user_id, course_id) VALUES ($1, $2) RETURNING *',
-    [student_id, course_id]
+    'INSERT INTO enrollments (user_id, course_id, assigned_instructor_id) VALUES ($1, $2, $3) RETURNING *',
+    [student_id, course_id, assigned_instructor_id]
   );
   return result.rows[0];
 };
