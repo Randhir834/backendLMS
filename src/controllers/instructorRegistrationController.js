@@ -72,13 +72,20 @@ const getRegistrationById = async (req, res, next) => {
 const updateRegistration = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { fullName, qualification, subjectExpertise, phoneNumber, role } = req.body;
+    const { fullName, qualification, subjectExpertise, phoneNumber, role, status, notes } = req.body;
 
-    // Validation
-    if (!fullName || !qualification || !subjectExpertise || !phoneNumber) {
-      return res.status(400).json({
-        error: 'Full Name, Qualification, Subject Expertise, and Phone Number are required.',
-      });
+    // Validate required fields only if they are provided
+    if (fullName !== undefined && !fullName) {
+      return res.status(400).json({ error: 'Full Name cannot be empty.' });
+    }
+    if (qualification !== undefined && !qualification) {
+      return res.status(400).json({ error: 'Qualification cannot be empty.' });
+    }
+    if (subjectExpertise !== undefined && !subjectExpertise) {
+      return res.status(400).json({ error: 'Subject Expertise cannot be empty.' });
+    }
+    if (phoneNumber !== undefined && !phoneNumber) {
+      return res.status(400).json({ error: 'Phone Number cannot be empty.' });
     }
 
     // Validate role if provided
@@ -86,17 +93,33 @@ const updateRegistration = async (req, res, next) => {
       return res.status(400).json({ error: 'Role must be either "instructor" or "student".' });
     }
 
+    // Validate status if provided
+    if (status && !['pending', 'contacted', 'accepted', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status value.' });
+    }
+
     const registration = await updateInstructorRegistration(id, {
       fullName,
       qualification,
       subjectExpertise,
       phoneNumber,
-      role: role || 'instructor',
+      role,
+      status,
+      notes,
     });
 
     if (!registration) {
       return res.status(404).json({ error: 'Registration not found.' });
     }
+
+    res.json({
+      message: 'Registration updated successfully.',
+      registration,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
     res.json({
       message: 'Registration updated successfully.',

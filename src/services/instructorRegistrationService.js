@@ -18,10 +18,47 @@ const getInstructorRegistrationById = async (id) => {
   return result.rows[0];
 };
 
-const updateInstructorRegistration = async (id, { fullName, qualification, subjectExpertise, phoneNumber, role }) => {
+const updateInstructorRegistration = async (id, { fullName, qualification, subjectExpertise, phoneNumber, role, status, notes }) => {
+  // Build dynamic query based on provided fields
+  const updates = [];
+  const values = [];
+  let paramCount = 1;
+
+  if (fullName !== undefined) {
+    updates.push(`full_name = $${paramCount++}`);
+    values.push(fullName);
+  }
+  if (qualification !== undefined) {
+    updates.push(`qualification = $${paramCount++}`);
+    values.push(qualification);
+  }
+  if (subjectExpertise !== undefined) {
+    updates.push(`subject_expertise = $${paramCount++}`);
+    values.push(subjectExpertise);
+  }
+  if (phoneNumber !== undefined) {
+    updates.push(`phone_number = $${paramCount++}`);
+    values.push(phoneNumber);
+  }
+  if (role !== undefined) {
+    updates.push(`role = $${paramCount++}`);
+    values.push(role);
+  }
+  if (status !== undefined) {
+    updates.push(`status = $${paramCount++}`);
+    values.push(status);
+  }
+  if (notes !== undefined) {
+    updates.push(`notes = $${paramCount++}`);
+    values.push(notes);
+  }
+
+  updates.push(`updated_at = NOW()`);
+  values.push(id);
+
   const result = await query(
-    'UPDATE instructor_registrations SET full_name = $1, qualification = $2, subject_expertise = $3, phone_number = $4, role = $5, updated_at = NOW() WHERE id = $6 RETURNING *',
-    [fullName, qualification, subjectExpertise, phoneNumber, role, id]
+    `UPDATE instructor_registrations SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+    values
   );
   return result.rows[0];
 };
