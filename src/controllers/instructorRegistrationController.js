@@ -121,15 +121,6 @@ const updateRegistration = async (req, res, next) => {
   }
 };
 
-    res.json({
-      message: 'Registration updated successfully.',
-      registration,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 const deleteRegistration = async (req, res, next) => {
   try {
     const { id } = req.params;
