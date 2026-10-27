@@ -2,7 +2,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { findUserByEmail, findUserByEmailOrPhone, createUser, updateUserPassword } = require('../services/userService');
 const { createResetToken, findUserIdByValidToken, deleteTokensForUser } = require('../services/passwordResetService');
-const { sendEmail } = require('../services/emailService');
+const { sendEmail, sendOTPEmail } = require('../services/emailService');
+const { createOTP, verifyOTP, hasValidVerifiedOTP, invalidateOTPs, OTP_EXPIRY_MINUTES } = require('../services/otpService');
 const { 
   createSession, 
   getUserSessions, 
@@ -165,14 +166,217 @@ const refreshToken = async (req, res, next) => {
   }
 };
 
+/**
+ * Request password reset - sends OTP to user's email
+ * POST /auth/forgot-password/request
+ */
+const requestPasswordReset = async (req, res, next) => {
+  try {
+    const { email, phone, identifier, expectedRole } = req.body;
+
+    // Support multiple reset methods
+    let resetIdentifier = email || phone || identifier;
+
+    if (!resetIdentifier) {
+      return res.status(400).json({ error: 'Please enter your email address.' });
+    }
+
+    if (expectedRole && !ALLOWED_ROLES.includes(expectedRole)) {
+      return res.status(400).json({ error: 'Invalid expectedRole.' });
+    }
+
+    const user = await findUserByEmailOrPhone(resetIdentifier);
+    const roleOk = user && (!expectedRole || user.role === expectedRole);
+
+    if (roleOk) {
+      // Generate and store OTP
+      const otpCode = await createOTP(user.id);
+      
+      // Send OTP email
+      const result = await sendOTPEmail({
+        to: user.email,
+        otpCode,
+        userName: user.name,
+        userRole: user.role,
+        expiryMinutes: OTP_EXPIRY_MINUTES,
+      });
+
+      if (!result.sent) {
+        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`🔐 PASSWORD RESET OTP (Development Mode)`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`Email: ${user.email}`);
+        console.log(`Name: ${user.name}`);
+        console.log(`Role: ${user.role}`);
+        console.log(`OTP Code: ${otpCode}`);
+        console.log(`Expires in: ${OTP_EXPIRY_MINUTES} minutes`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+      }
+    }
+
+    // Always return success message to prevent email enumeration
+    res.json({
+      message: 'If an account exists with that email, a verification code has been sent. Please check your email inbox and spam folder.',
+      expiryMinutes: OTP_EXPIRY_MINUTES,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Verify OTP code
+ * POST /auth/forgot-password/verify-otp
+ */
+const verifyPasswordResetOTP = async (req, res, next) => {
+  try {
+    const { email, phone, identifier, otp, expectedRole } = req.body;
+
+    let resetIdentifier = email || phone || identifier;
+
+    if (!resetIdentifier || !otp) {
+      return res.status(400).json({ error: 'Email and OTP code are required.' });
+    }
+
+    if (otp.length !== 4 || !/^\d{4}$/.test(otp)) {
+      return res.status(400).json({ error: 'Please enter a valid 4-digit code.' });
+    }
+
+    if (expectedRole && !ALLOWED_ROLES.includes(expectedRole)) {
+      return res.status(400).json({ error: 'Invalid expectedRole.' });
+    }
+
+    const user = await findUserByEmailOrPhone(resetIdentifier);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'No account found with this email address.' });
+    }
+
+    if (expectedRole && user.role !== expectedRole) {
+      return res.status(403).json({ 
+        error: `This account is registered as a ${user.role}, not a ${expectedRole}.` 
+      });
+    }
+
+    // Verify the OTP
+    const result = await verifyOTP(user.id, otp);
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({
+      message: 'Code verified successfully. You can now reset your password.',
+      verified: true,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Reset password with verified OTP
+ * POST /auth/forgot-password/reset
+ */
+const resetPasswordWithOTP = async (req, res, next) => {
+  try {
+    const { email, phone, identifier, password, expectedRole } = req.body;
+
+    let resetIdentifier = email || phone || identifier;
+
+    if (!resetIdentifier || !password) {
+      return res.status(400).json({ error: 'Email and new password are required.' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+    }
+
+    if (expectedRole && !ALLOWED_ROLES.includes(expectedRole)) {
+      return res.status(400).json({ error: 'Invalid expectedRole.' });
+    }
+
+    const user = await findUserByEmailOrPhone(resetIdentifier);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'No account found with this email address.' });
+    }
+
+    if (expectedRole && user.role !== expectedRole) {
+      return res.status(403).json({ 
+        error: `This account is registered as a ${user.role}, not a ${expectedRole}.` 
+      });
+    }
+
+    // Check if user has a valid verified OTP
+    const hasVerifiedOTP = await hasValidVerifiedOTP(user.id);
+    
+    if (!hasVerifiedOTP) {
+      return res.status(403).json({ 
+        error: 'Please verify your OTP code before resetting your password.' 
+      });
+    }
+
+    // Update password
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await updateUserPassword(user.id, hashedPassword);
+    
+    // Invalidate all OTPs for this user
+    await invalidateOTPs(user.id);
+    
+    // Revoke all sessions for security
+    await revokeAllSessions(user.id);
+
+    res.json({ 
+      message: 'Password updated successfully. You can now sign in with your new password.' 
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Legacy token-based password reset (kept for backward compatibility)
+ * POST /auth/reset-password
+ */
+const resetPassword = async (req, res, next) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Please enter your new password.' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+    }
+
+    const userId = await findUserIdByValidToken(token);
+    if (!userId) {
+      return res.status(400).json({ error: 'This password reset link has expired or is invalid. Please request a new one.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await updateUserPassword(userId, hashedPassword);
+    await deleteTokensForUser(userId);
+    
+    // Revoke all sessions when password is changed for security
+    await revokeAllSessions(userId);
+
+    res.json({ message: 'Password updated successfully. You can sign in with your new password.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Legacy forgot password endpoint (kept for backward compatibility)
+ * POST /auth/forgot-password
+ */
 const forgotPassword = async (req, res, next) => {
   try {
     const { email, phone, identifier, expectedRole, clientOrigin } = req.body;
 
-    // Support multiple reset methods:
-    // 1. Legacy: email
-    // 2. New: phone
-    // 3. Unified: identifier (email or phone)
     let resetIdentifier = email || phone || identifier;
 
     if (!resetIdentifier) {
@@ -232,7 +436,6 @@ If you didn't request this password reset, you can safely ignore this email.
 © ${new Date().getFullYear()} Playfit
       `;
 
-      // Always send to email even if user searched by phone
       const result = await sendEmail({
         to: user.email,
         subject,
@@ -256,36 +459,6 @@ If you didn't request this password reset, you can safely ignore this email.
       message:
         'If an account exists with that email, password reset instructions have been sent. Please check your email inbox and spam folder. The reset link will expire in 10 minutes.',
     });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const resetPassword = async (req, res, next) => {
-  try {
-    const { token, password } = req.body;
-
-    if (!token || !password) {
-      return res.status(400).json({ error: 'Please enter your new password.' });
-    }
-
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
-    }
-
-    const userId = await findUserIdByValidToken(token);
-    if (!userId) {
-      return res.status(400).json({ error: 'This password reset link has expired or is invalid. Please request a new one.' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 12);
-    await updateUserPassword(userId, hashedPassword);
-    await deleteTokensForUser(userId);
-    
-    // Revoke all sessions when password is changed for security
-    await revokeAllSessions(userId);
-
-    res.json({ message: 'Password updated successfully. You can sign in with your new password.' });
   } catch (error) {
     next(error);
   }
@@ -408,8 +581,11 @@ module.exports = {
   register, 
   login, 
   refreshToken, 
-  forgotPassword, 
-  resetPassword,
+  forgotPassword,  // Legacy token-based (kept for backward compatibility)
+  resetPassword,   // Legacy token-based (kept for backward compatibility)
+  requestPasswordReset,     // New OTP-based flow
+  verifyPasswordResetOTP,   // New OTP-based flow
+  resetPasswordWithOTP,     // New OTP-based flow
   getSessions,
   logout,
   logoutDevice,
