@@ -45,13 +45,14 @@ const findLiveClassById = async (id) => {
 const findLiveClassesByInstructor = async (instructorId, filters = {}) => {
   const { status, course_id, search } = filters;
   
+  // Changed to filter by created_by (instructor who created the class)
+  // instead of course_instructors (all instructors teaching the course)
   let sql = `
     SELECT lc.*, c.title AS course_title, c.thumbnail_url, u.name AS created_by_name
     FROM live_classes lc
     JOIN courses c ON lc.course_id = c.id
-    JOIN course_instructors ci ON c.id = ci.course_id
     JOIN users u ON lc.created_by = u.id
-    WHERE ci.instructor_id = $1
+    WHERE lc.created_by = $1
   `;
   
   const params = [instructorId];
@@ -165,7 +166,7 @@ const findCoursesWithLiveClassesByInstructor = async (instructorId) => {
       ) AS live_classes
     FROM courses c
     INNER JOIN course_instructors ci ON ci.course_id = c.id
-    LEFT JOIN live_classes lc ON lc.course_id = c.id
+    LEFT JOIN live_classes lc ON lc.course_id = c.id AND lc.created_by = $1
     WHERE ci.instructor_id = $1
     GROUP BY c.id
     ORDER BY c.created_at DESC`,

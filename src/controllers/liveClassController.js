@@ -163,6 +163,11 @@ const updateLiveClass = async (req, res, next) => {
       return res.status(404).json({ error: 'Live class not found' });
     }
 
+    // Security: Instructors can only update their own classes, admins can update any
+    if (req.user.role === 'instructor' && liveClass.created_by !== req.user.id) {
+      return res.status(403).json({ error: 'You can only update classes that you created' });
+    }
+
     // Validate Google Meet link if provided
     if (req.body.meet_link && !req.body.meet_link.includes('meet.google.com')) {
       return res.status(400).json({ error: 'Invalid Google Meet link' });
@@ -191,6 +196,11 @@ const deleteLiveClass = async (req, res, next) => {
     const liveClass = await findLiveClassById(req.params.id);
     if (!liveClass) {
       return res.status(404).json({ error: 'Live class not found' });
+    }
+
+    // Security: Instructors can only delete their own classes, admins can delete any
+    if (req.user.role === 'instructor' && liveClass.created_by !== req.user.id) {
+      return res.status(403).json({ error: 'You can only delete classes that you created' });
     }
 
     await deleteLiveClassById(req.params.id);
